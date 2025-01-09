@@ -1,0 +1,1021 @@
+---
+title: "FantasyModelingRBWRTE"
+author: "Delaney Helgeson"
+format: 
+  html:
+    self-contained: true
+editor: source
+---
+
+```{r}
+#| message: false
+#| warning: false
+library(zoo)
+library(dplyr)
+library(tidyverse)
+library(tidymodels)
+library(ggplot2)
+library(stacks)
+library(vip)
+library(plotly)
+```
+
+
+
+## Load Data
+```{r}
+#| warning: false
+# Note: working directory resets after you run the code. MUST RUN ALL CODE AT ONCE
+
+
+year <- "2015"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+rb_2015 <- read.csv(paste("RB_",year,"_All.csv", sep=''))
+wr_2015 <- read.csv(paste("WR_",year,"_All.csv", sep=''))
+te_2015 <- read.csv(paste("TE_",year,"_All.csv", sep=''))
+injuries_2015 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+
+year <- "2016"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+rb_2016 <- read.csv(paste("RB_",year,"_All.csv", sep=''))
+wr_2016 <- read.csv(paste("WR_",year,"_All.csv", sep=''))
+te_2016 <- read.csv(paste("TE_",year,"_All.csv", sep=''))
+injuries_2016 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2017"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+rb_2017 <- read.csv(paste("RB_",year,"_All.csv", sep=''))
+wr_2017 <- read.csv(paste("WR_",year,"_All.csv", sep=''))
+te_2017 <- read.csv(paste("TE_",year,"_All.csv", sep=''))
+injuries_2017 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2018"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+rb_2018 <- read.csv(paste("RB_",year,"_All.csv", sep=''))
+wr_2018 <- read.csv(paste("WR_",year,"_All.csv", sep=''))
+te_2018 <- read.csv(paste("TE_",year,"_All.csv", sep=''))
+injuries_2018 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+
+```
+
+
+
+
+```{r}
+doFeatureExtraction <- function(rwt_feat_extract, injuries, rolls = 3){
+  
+# Replace NAs of certain values with 0. - ie: Completion Percentage becomes 0 if no passes were attempted. 
+# Remove columns that are not of interest to players, and removing other FantasyPoint formulas
+rwt_feat_extract_0 <- rwt_feat_extract %>%
+  dplyr::mutate(
+         RecYdsPerRecepetion =  replace_na(RecYdsPerRecepetion, 0),
+         CatchPercentage =  replace_na(CatchPercentage, 0),
+         RecYdsPerTgt =  replace_na(RecYdsPerTgt, 0),
+         RushingsYdsPerAtt =  replace_na(RushingsYdsPerAtt, 0),
+         XPPercent = replace_na(as.numeric(XPPercent), 0),
+         FieldGoalPercentage =  replace_na(FieldGoalPercentage, 0),
+         # Clean up position names
+         Position = case_when(
+           tolower(Position) == "rb" ~ "RB",
+           tolower(Position) == "fb" ~ "FB",
+           tolower(Position) == "wr" ~ "WR",
+           tolower(Position) == "te" ~ "TE",
+         ),
+         DraftRound = replace_na(DraftRound, max(rwt_feat_extract$DraftRound, na.rm = TRUE) + 1),
+         OverallDraftPick = replace_na(OverallDraftPick, max(rwt_feat_extract$OverallDraftPick, 
+                                                             na.rm = TRUE) + 1),
+         
+         ) %>%
+  select(-c("X","Rank","PPR","DKPt","FDPt","FieldGoalsMade","FieldGoalsAtt","FieldGoalPercentage")) %>%
+  # Exclude games where players did not play
+  filter(!is.na(FantPt))
+
+# Fix month formattingS
+rwt_feat_extract_0a <- rwt_feat_extract_0 %>%
+  mutate(Date = case_when(
+    str_detect(Date, '-') ~ format(strptime(Date, "%Y-%m-%d"),"%m/%d/%Y"),
+    TRUE ~ Date
+  ))
+
+# Convert Dates to Month and Year columns
+# Extract Team/Opp Scores, Overtime T/F
+rwt_feat_extract_1 <- rwt_feat_extract_0a %>%
+  dplyr::mutate(Month_num = str_split_fixed(Date, "/", 3)[,1],
+         Month = case_when(
+           as.numeric(Month_num) == 8 ~ "Aug",
+           as.numeric(Month_num) == 9 ~ "Sep",
+           as.numeric(Month_num) == 10 ~ "Oct",
+           as.numeric(Month_num) == 11 ~ "Nov",
+           as.numeric(Month_num) == 12 ~ "Dec",
+           as.numeric(Month_num) == 1 ~ "Jan",
+         ),
+         Year = str_split_fixed(Date, "/", 3)[,3],
+         .after = "Date") %>%
+  dplyr::mutate(Overtime = str_detect(Result, " \\(OT\\)"),
+         ResultCut = str_replace(Result, " \\(OT\\)",""),
+         TeamScore = as.numeric(str_split_fixed(str_split_fixed(ResultCut, "-", 2)[,1], " ",2)[,2]),
+         OppScore = as.numeric(str_split_fixed(ResultCut, "-", 2)[,2]),
+         WinLoss = str_split_fixed(ResultCut, " ", 2)[,1],
+    .after = Result
+  ) %>%
+  select(-c("Month_num","Date","Result","ResultCut"))
+
+
+
+# Create column for PlayerGameNumber
+playerGameNums <- rwt_feat_extract_1 %>% 
+  group_by(Player) %>%
+  arrange(Week) %>%  
+  dplyr::mutate(PlayerGameNum1 = row_number()) %>%
+  dplyr::select(c("Player","Week","PlayerGameNum1"))
+# Join to main data set
+rwt_feat_extract_2 <- rwt_feat_extract_1 %>%
+  left_join(., playerGameNums, by = c("Player"="Player", "Week"="Week"),
+            suffix = c("", "")) %>%
+  dplyr::mutate(PlayerGameNum = PlayerGameNum1,
+         .after = Week) %>%
+  dplyr::select(-c("PlayerGameNum1"))
+
+
+
+# Shift fantasy points to next game 
+rwt_feat_extract_3 <- rwt_feat_extract_2 %>%
+  dplyr::mutate(FuturePlayerGameNum = PlayerGameNum + 1,
+         .after = PlayerGameNum) 
+
+rwt_feat_extract_3_copy <- rwt_feat_extract_3
+rwt_feat_extract_4 <- rwt_feat_extract_3 %>%
+  full_join(., rwt_feat_extract_3_copy[,c("Player","PlayerGameNum","FantPt","Day","Month","Team",
+                                 "HomeOrAway","Opponent")], 
+            by = c("FuturePlayerGameNum" = "PlayerGameNum", "Player" = "Player"), 
+             suffix = c("", ".Future1")) %>%
+  dplyr::mutate(FantPt.Future = FantPt.Future1,
+                Day.Future = Day.Future1,
+                Month.Future = Month.Future1,
+                Team.Future = Team.Future1,
+                HomeOrAway.Future = HomeOrAway.Future1,
+                Opponent.Future = Opponent.Future1,
+         .after = FantPt) %>%
+  select(-c("FantPt.Future1","Day.Future1","Month.Future1","Team.Future1","HomeOrAway.Future1","Opponent.Future1")) %>%
+  filter(FuturePlayerGameNum != 1 & !is.na(FantPt.Future)) %>% ungroup()
+
+
+# Calculate Rolling Means for PlayerGameNumbers > k (added suffix "rm" to column names)
+# Using the data from the first k games to predict the game outcome of the (k+1)th game
+# rolling mean is calculated using the ith, (i-1)th, and (i-2)th game for k = 3
+rolling_means <- rwt_feat_extract_4 %>%
+  dplyr::arrange(Player) %>%
+  group_by(Player) %>% 
+  dplyr::arrange(PlayerGameNum, .by_group = TRUE) %>%
+  dplyr::mutate(PlayerGameNum = PlayerGameNum,
+         FantPtRm = rollmean(FantPt, k=rolls, fill=NA, align="right"),
+         TeamScoreRm = rollmean(TeamScore, k=rolls, fill=NA, align="right"),
+         # Note, this is not the opponent's rolling mean, this is how opponents of the team of interest
+         # typically score
+         OppScoreRm = rollmean(OppScore, k=rolls, fill=NA, align="right"),
+         PassTgtRm = rollmean(PassTgt, k=rolls, fill=NA, align="right"),
+         ReceptionsRm = rollmean(Receptions, k=rolls, fill=NA, align="right"),
+         ReceivingYdsRm = rollmean(ReceivingYds, k=rolls, fill=NA, align="right"),
+         RecYdsPerReceptionRm = rollmean(RecYdsPerRecepetion, k=rolls, fill=NA, align="right"),
+         ReceivingTDRm = rollmean(ReceivingTD, k=rolls, fill=NA, align="right"),
+         CatchPercentageRm = rollmean(CatchPercentage, k=rolls, fill=NA, align="right"),
+         RecYdsPerTgtRm = rollmean(RecYdsPerTgt, k=rolls, fill=NA, align="right"),
+         FmbRm = rollmean(Fmb, k=rolls, fill=NA, align="right"),
+         FmbRecoveredRm = rollmean(FmbRecovered, k=rolls, fill=NA, align="right"),
+         YdsFmbRecoveredRm = rollmean(YdsFmbRecovered, k=rolls, fill=NA, align="right"),
+         FmbRecovTDRm = rollmean(FmbRecovTD, k=rolls, fill=NA, align="right"),
+         ForcedFmbRm = rollmean(ForcedFmb, k=rolls, fill=NA, align="right"),
+         RushingAttRm = rollmean(RushingAtt, k=rolls, fill=NA, align="right"),
+         RushingYdsRm = rollmean(RushingYds, k=rolls, fill=NA, align="right"),
+         RushingsYdsPerAttRm = rollmean(RushingsYdsPerAtt, k=rolls, fill=NA, align="right"),
+         RushingTDRm = rollmean(RushingTD, k=rolls, fill=NA, align="right"),
+         AllTDRm = rollmean(AllTD, k=rolls, fill=NA, align="right"),
+         XPMRm = rollmean(XPM, k=rolls, fill=NA, align="right"),
+         XPARm = rollmean(XPA, k=rolls, fill=NA, align="right"),
+         XPPercentRm = rollmean(XPPercent, k=rolls, fill=NA, align="right"),
+         PC2Rm = rollmean(PC2, k=rolls, fill=NA, align="right"),
+         SftyRm = rollmean(Sfty, k=rolls, fill=NA, align="right"),
+         AllPtsRm = rollmean(AllPts, k=rolls, fill=NA, align="right")
+         )  %>%
+  filter(PlayerGameNum >= rolls)
+
+
+# Add cumulative average for GameNum < k
+cumulative_means <- rwt_feat_extract_4 %>%
+  dplyr::arrange(Player) %>%
+  group_by(Player) %>% 
+  dplyr::arrange(PlayerGameNum, .by_group = TRUE) %>%
+  filter(PlayerGameNum < rolls) %>%
+  dplyr::mutate(PlayerGameNum = PlayerGameNum,
+         FantPtRm = dplyr::cummean(FantPt),
+         TeamScoreRm = dplyr::cummean(TeamScore),
+         # Note, this is not the opponent's rolling mean, this is how opponents of the team of interest
+         # typically score
+         OppScoreRm = dplyr::cummean(FantPt),
+         PassTgtRm = dplyr::cummean(PassTgt),
+         ReceptionsRm = dplyr::cummean(Receptions),
+         ReceivingYdsRm = dplyr::cummean(ReceivingYds),
+         RecYdsPerReceptionRm = dplyr::cummean(RecYdsPerRecepetion),
+         ReceivingTDRm = dplyr::cummean(ReceivingTD),
+         CatchPercentageRm = dplyr::cummean(CatchPercentage),
+         RecYdsPerTgtRm = dplyr::cummean(RecYdsPerTgt),
+         FmbRm = dplyr::cummean(Fmb),
+         FmbRecoveredRm = dplyr::cummean(FmbRecovered),
+         YdsFmbRecoveredRm = dplyr::cummean(YdsFmbRecovered),
+         FmbRecovTDRm = dplyr::cummean(FmbRecovTD),
+         ForcedFmbRm = dplyr::cummean(ForcedFmb),
+         RushingAttRm = dplyr::cummean(RushingAtt),
+         RushingYdsRm = dplyr::cummean(RushingYds),
+         RushingsYdsPerAttRm = dplyr::cummean(RushingsYdsPerAtt),
+         RushingTDRm = dplyr::cummean(RushingTD),
+         AllTDRm = dplyr::cummean(FantPt),
+         XPMRm = dplyr::cummean(XPM),
+         XPARm = dplyr::cummean(XPA),
+         XPPercentRm = dplyr::cummean(XPPercent),
+         PC2Rm = dplyr::cummean(PC2),
+         SftyRm = dplyr::cummean(Sfty),
+         AllPtsRm = dplyr::cummean(AllPts))
+
+# combine rolling and cumulative means
+rolling_and_cumulative_means <- rbind(cumulative_means, rolling_means)
+
+# Delete columns for individual game values - not needed after rolling mean calculations
+rwt_colnames <- c("TeamScore","OppScore","PassTgt","Receptions","RecYdsPerRecepetion",
+                 "ReceivingTD","CatchPercentage",
+                 "RecYdsPerTgt","Fmb","ForcedFmb","FmbRecovered",
+                 "YdsFmbRecovered","FmbRecovTD","ForcedFmb","RushingAtt","RushingsYdsPerAtt",
+                 "RushingTD","AllTD","XPM","XPA","XPPercent","PC2","Sfty","AllPts")
+
+rwt_feat_extract_5 <- rolling_and_cumulative_means %>%
+  select(-all_of(rwt_colnames)) %>%
+  dplyr::arrange(Week, Opponent.Future)
+
+# Get Opponent's past performance 
+opp_rwt <- rwt_feat_extract_5 %>%
+  dplyr::arrange(Opponent.Future, Week) %>%
+  group_by(Opponent.Future, Week) %>%
+  dplyr::summarise(MeanOppFantPt = mean(FantPt, na.rm = TRUE),
+                   MeanOppRushingYds = mean(RushingYds, na.rm = TRUE),
+                   MeanOppReceivingYds = mean(ReceivingYds, na.rm = TRUE)) %>%
+  dplyr::mutate(StackedMeanOppFantPt = dplyr::cummean(MeanOppFantPt),
+                StackedMeanOppRushingYds = dplyr::cummean(MeanOppRushingYds),
+                StackedMeanOppReceivingYds = dplyr::cummean(MeanOppReceivingYds)) %>%
+  select(-c("MeanOppFantPt","MeanOppRushingYds","MeanOppReceivingYds"))
+
+
+
+rwt_feat_extract_6 <- rwt_feat_extract_5 %>%
+  left_join(., opp_rwt, by = c("Opponent.Future" = "Opponent.Future","Week" = "Week"), suffix = c("",""))
+
+# Add column for if the player is returning from an injury
+injuries_1 <- injuries %>%
+  filter(Game.Status != "") %>%
+  dplyr::mutate(NextWeek = Week + 1)
+
+rwt_feat_extract_7 <- rwt_feat_extract_6 %>%
+  left_join(., injuries_1[,c("Player","NextWeek","Game.Status")], 
+            by=c("Player" = "Player", "Week" = "NextWeek"), suffix = c("","")) %>%
+  mutate(RecentInjury = ifelse(!is.na(Game.Status), "Y","N")) %>%
+  select(-c("Game.Status"))
+
+
+rwt_feat_extract_8 <- rwt_feat_extract_7 %>%
+  dplyr::mutate(HomeOrAway.Future = ifelse(HomeOrAway.Future == "", "Home","Away")
+                #,Overtime = as.character(Overtime)
+                ) %>%
+  select(-c("FantPt","Day","Month","Team","HomeOrAway","Opponent","Overtime","RushingYds","ReceivingYds"))
+
+return(rwt_feat_extract_8)
+
+
+}
+
+```
+
+
+
+# Compile Data from All Years
+```{r}
+
+rwt_All <- data.frame()
+
+# To perform feature extraction, pass each data frame object to the 
+# function and append it to a common dataframe. 
+# Couldn't put this into a loop because I haven't figured out how to iterate
+# through multiple data frames in R.
+rwt_temp <- doFeatureExtraction(te_2018, injuries_2018, rolls = 5)
+any(is.na(rwt_temp))
+rwt_All <- rbind(rwt_All, rwt_temp)
+
+setwd("C:/Users/delan/Downloads/STAT6341 Sports Analytics/Fantasy Project")
+write.csv(rwt_All, "rwt_All_ready_for_modeling_k_5.csv")
+
+```
+
+
+# MODELING Starts Here
+```{r}
+setwd("C:/Users/delan/Downloads/STAT6341 Sports Analytics/Fantasy Project")
+rwt_All <- read_csv("rwt_All_ready_for_modeling_k_4.csv")
+
+# Remove irrelevant (to modeling) columns 
+rwt_All_1 <- rwt_All %>% ungroup() %>%
+  dplyr::select(-c("...1","Player","GameNum","Week","PlayerGameNum","FuturePlayerGameNum",
+                   "WinLoss"))
+
+```
+
+## Split for Validation
+```{r}
+# Train/Validation splits
+rwt_split <- make_splits(
+  rwt_All_1 %>% filter(Year < 2017),
+  rwt_All_1 %>% filter(Year==2017))
+
+rwt_train <- training(rwt_split) %>% select(-c("Year","Team.Future","Opponent.Future"))
+rwt_validation <- testing(rwt_split) %>% select(-c("Year","Team.Future","Opponent.Future"))
+
+```
+
+# Recipe for validation
+```{r}
+# Create recipe
+tidy_rec <- recipe(FantPt.Future ~ ., data = rwt_train) %>%
+                step_nzv(all_predictors()) %>%
+                step_corr(all_predictors(), -all_nominal()) %>%
+                step_lincomb(all_predictors(), -all_nominal()) %>%
+                step_center(all_predictors(), -all_nominal()) %>% 
+                step_scale(all_predictors(), -all_nominal()) %>% 
+                step_ns(FantPtRm, StackedMeanOppFantPt, deg_free = 3) %>%
+                step_dummy(all_nominal(), one_hot = FALSE)
+
+# Prep
+tidy_prep <- prep(tidy_rec)
+
+#tidy_juice <- juice(tidy_prep)
+
+set.seed(123)
+tidy_kfolds <- vfold_cv(rwt_train, v = 5, repeats = 5)
+
+##To save_ all predictions
+ctrl_res_validation <- control_stack_resamples()
+
+```
+
+# Fit Linear Regression for validation
+```{r}
+rwt_lm <- linear_reg() %>% 
+                  set_mode("regression") %>%
+                  set_engine("lm") 
+
+#Specify modeling procedure
+rwt_wf <- workflow() %>% 
+            add_recipe(tidy_rec) %>% 
+            add_model(rwt_lm)
+
+# For resampling
+set.seed(6341)
+rwt_lm_fit_rs <- fit_resamples(
+  rwt_wf,
+  resamples = tidy_kfolds,
+  metrics = metric_set(rmse),
+  control = ctrl_res_validation)
+
+# fit on full training set
+rwt_lm_fit <- fit(rwt_wf, data= rwt_train)
+coefficients <- tidy(rwt_lm_fit)
+coefficients
+
+##Validation performance
+rwt_wf %>%
+      last_fit(rwt_split, metrics = metric_set(rmse)) %>% 
+      collect_metrics()
+
+```
+
+# Training/Test Split
+```{r}
+# Train/Test splits
+rwt_split <- make_splits(
+  rwt_All_1 %>% filter(Year < 2018),
+  rwt_All_1 %>% filter(Year==2018))
+
+rwt_train <- training(rwt_split) %>% select(-c("Year","Team.Future","Opponent.Future"))
+rwt_test <- testing(rwt_split) %>% select(-c("Year","Team.Future","Opponent.Future"))
+
+```
+
+# Recipe for Linear Models
+```{r}
+# Create recipe
+tidy_rec <- recipe(FantPt.Future ~ ., data = rwt_train) %>%
+                step_nzv(all_predictors()) %>%
+                step_corr(all_predictors(), -all_nominal()) %>%
+                step_lincomb(all_predictors(), -all_nominal()) %>%
+                step_center(all_predictors(), -all_nominal()) %>% 
+                step_scale(all_predictors(), -all_nominal()) %>% 
+                step_ns(all_numeric_predictors(), deg_free = 3) %>%
+                step_dummy(all_nominal(), one_hot = FALSE)
+
+# Prep
+tidy_prep <- prep(tidy_rec)
+
+#tidy_juice <- juice(tidy_prep)
+
+set.seed(123)
+tidy_kfolds <- vfold_cv(rwt_train, v = 5, repeats = 5)
+
+##To save_ all predictions
+ctrl_grid_glmnet <- control_stack_grid()
+ctrl_res <- control_stack_resamples()
+```
+
+# Fit Linear Regression 
+```{r}
+rwt_lm <- linear_reg() %>% 
+                  set_mode("regression") %>%
+                  set_engine("lm") 
+
+#Specify modeling procedure
+rwt_wf <- workflow() %>% 
+            add_recipe(tidy_rec) %>% 
+            add_model(rwt_lm)
+
+# For resampling
+set.seed(6341)
+rwt_lm_fit_rs <- fit_resamples(
+  rwt_wf,
+  resamples = tidy_kfolds,
+  metrics = metric_set(rmse),
+  control = ctrl_res)
+
+# fit on full training set
+rwt_lm_fit <- fit(rwt_wf, data= rwt_train)
+coefficients <- tidy(rwt_lm_fit)
+
+
+##Test performance
+predictions <- rwt_wf %>%
+      last_fit(rwt_split, metrics = metric_set(rmse)) %>% 
+      collect_predictions()
+
+##Test performance
+rwt_wf %>%
+      last_fit(rwt_split, metrics = metric_set(rmse)) %>% 
+      collect_metrics()
+
+
+training_preds_actual <- data.frame(cbind(predictions$FantPt.Future, predictions$.pred))
+
+plot(predictions$FantPt.Future, predictions$.pred)
+abline(a=0, b=1)
+
+
+rmse(training_preds_actual, X1,X2)
+
+ggplot(training_preds_actual, aes(x=X1, y=X2)) + geom_point() +
+  ggtitle("Predicted vs. Actual on Test Data For RB, WR, TE")+
+  xlab("Actual Fantasy Points")+
+  ylab("Predicted Fantasy Points")+
+  theme(plot.title=element_text(hjust=0.5, face='bold')) +
+  geom_abline(slope = 1, intercept = 0)
+```
+
+# Psuedo Variable Importance for Linear Regression
+```{r}
+psuedoVarImp <- coefficients %>%
+  mutate(pvarImp = abs(statistic)) %>%
+  dplyr::arrange(desc(pvarImp)) %>%
+  filter(term != "(Intercept)") %>%
+  select(c("term","pvarImp")) %>%
+  dplyr::slice(1:15)
+
+
+rwt_variableImportance <- psuedoVarImp %>%
+  mutate(term = case_when(
+    term == "RushingAttRm_ns_2" ~ "Rushing Attempts Moving Avg NS #2",
+    term == "PassTgtRm_ns_3" ~ "Pass Targets Moving Avg NS #3",
+    term == "DraftRound_ns_2" ~ "Draft Round NS #2",
+    term == "HomeOrAway.Future_Home" ~ "Home Or Away",
+    term == "Month.Future_Sep" ~ "Month: September",
+    term == "FantPtRm_ns_2" ~ "Fantasy Point Moving Avg NS #2",
+    term == "DraftRound_ns_3" ~ "Draft Round NS #3",
+    term == "ReceivingYdsRm_ns_1" ~ "Receiving Yards Moving Avg NS #1",
+    term == "PassTgtRm_ns_2" ~ "Pass Targets Moving Avg NS #2",
+    term == "Month.Future_Oct" ~ "Month: October",
+    term == "OppScoreRm_ns_3" ~ "Opponent's Score Moving Avg NS #3",
+    term == "PassTgtRm_ns_1" ~ "Pass Targets Moving Avg NS #1",
+    term == "FantPtRm_ns_3" ~ "Fantasy Point Moving Avg NS #3",
+    term == "RecYdsPerReceptionRm_ns_1" ~ "Receiving Yards / Reception Moving Avg NS #1",
+    term == "RecYdsPerTgtRm_ns_1" ~ "Receiving Yards / Target Moving Avg NS #1",
+    term == "AllPtsRm_ns_1" ~ "All Points Moving Avg NS #1",
+    TRUE ~ "Other"
+  ))
+  
+  
+rwt_variableImportance_ggplot <-  data.frame(rwt_variableImportance %>%
+  filter(term != "Other") %>% ungroup() %>%
+  dplyr::arrange(desc(pvarImp)))
+
+
+  ggplot(rwt_variableImportance_ggplot)+
+  geom_col(aes(x = reorder(term, pvarImp), y = pvarImp))+
+  ggtitle("Figure 2A: Variable Importance for\nLinear Regression (RB, WR, TE)")+
+  xlab("Variable")+
+  ylab("Absolute Value of Test Statistic")+
+  coord_flip()+
+  theme(plot.title=element_text(hjust=0.5, face='bold'))
+
+```
+
+# Penalized Regression
+```{r}
+rwt_glmnet <- linear_reg(
+  penalty = tune(), 
+  mixture = tune()) %>% 
+  set_mode("regression") %>%
+  set_engine("glmnet", seed=3341, nthread=6) 
+
+#Specify modeling procedure
+rwt_glmnet_wf <- workflow() %>% 
+  add_recipe(tidy_rec) %>% 
+  add_model(rwt_glmnet)
+
+# set parameter grid
+glmnet_grid <- grid_max_entropy(
+  extract_parameter_set_dials(rwt_glmnet), 
+  size = 12)
+
+# tune resamples
+rwt_glmnet_fit <- tune_grid(
+  rwt_glmnet_wf,
+  resamples = tidy_kfolds,
+  grid = glmnet_grid,
+  control = ctrl_grid_glmnet,
+  metrics = metric_set(rmse))
+
+
+rwt_glmnet_best_tune <- rwt_glmnet_fit %>% select_best("rmse")
+
+#Note that we need to update our workflow
+rwt_glmnet_final_wf <- rwt_glmnet_wf %>% 
+                        finalize_workflow(rwt_glmnet_best_tune) # must pass optimal tuning parameter
+rwt_glmnet_final_wf # tells you what the model is. 
+
+##Extract coefficients
+coefficients_glment <- rwt_glmnet_final_wf %>% 
+  fit(rwt_train) %>% # fit the model to training data
+  extract_fit_parsnip() %>% # can use extract_fit_parsnip()
+  tidy() # dots become zeros
+
+#Collect predictions
+##Test performance
+glmnet_predictions <- rwt_glmnet_final_wf %>%
+      last_fit(rwt_split, metrics = metric_set(rmse)) %>% 
+      collect_predictions()
+
+# Test performance
+rwt_glmnet_final_wf %>% 
+  last_fit(rwt_split, metrics = metric_set(rmse, rsq, mae)) %>% 
+  collect_metrics() 
+
+# Check metrics manually
+test_pred_v_actual <- data.frame(cbind(glmnet_predictions$FantPt.Future, glmnet_predictions$.pred))
+rmse(test_pred_v_actual, X1,X2)
+
+# Predicted vs. Actual
+ggplot(test_pred_v_actual, aes(x=X1, y=X2)) + geom_point() +
+  ggtitle("Figure 6: Predicted vs. Actual on Test Data\nPenalized Regression for RB, WR, TE")+
+  xlab("Actual Fantasy Points")+
+  ylab("Predicted Fantasy Points")+
+  theme(plot.title=element_text(hjust=0.5, face='bold')) +
+  geom_abline(slope = 1, intercept = 0)
+```
+
+## Visualize Resampling for Penalized Regression
+```{r}
+param_names <- list(
+  'penalty'="Penalty",
+  'mixture'="Mixture"
+)
+
+parameter_labeller <- function(variable,value){
+  return(param_names[value])
+}
+
+rwt_glmnet_fit %>%
+  collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  select(mean, penalty:mixture) %>%
+  pivot_longer(penalty:mixture,
+               values_to = "value",
+               names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x", labeller=parameter_labeller) +
+  labs(x = NULL, y = "RMSE") +
+  ggtitle("Performance of Hyperparameters for Penalized Regression")+
+  theme(plot.title=element_text(hjust=0.5, face='bold'))
+```
+
+
+# Recipe for Random Forest and XGBoost
+```{r}
+# Create recipe
+tidy_rec <- recipe(FantPt.Future ~ ., data = rwt_train) %>%
+                step_nzv(all_predictors()) %>%
+                step_corr(all_predictors(), -all_nominal()) %>%
+                step_lincomb(all_predictors(), -all_nominal()) %>%
+                step_center(all_predictors(), -all_nominal()) %>% 
+                step_scale(all_predictors(), -all_nominal()) %>% 
+                step_dummy(all_nominal(), one_hot = TRUE) 
+
+# Prep
+tidy_prep <- prep(tidy_rec)
+
+tidy_juice <- juice(tidy_prep)
+
+set.seed(123)
+tidy_kfolds <- vfold_cv(rwt_train, v = 5, repeats = 5)
+
+##To save_ all predictions
+#ctrl_grid_ranger <- control_stack_grid()
+#ctrl_grid_xgb <- control_stack_grid()
+
+```
+
+# Random Forest
+```{r}
+# Define model
+rwt_ranger <- rand_forest(trees = 10*(ncol(juice(prep(tidy_rec)))-1),
+                          mtry = tune(),
+                          min_n = tune()) %>%
+  set_mode("regression") %>%
+  set_engine("ranger", seed = 3341, num.threads = 30, importance = "impurity")
+
+# Define workflow
+rwt_ranger_wf <- workflow() %>% 
+  add_recipe(tidy_rec) %>% 
+  add_model(rwt_ranger)
+
+# Define tuning parameters
+# HOML suggestion for mtry: start with five evenly spaced values going from 2 to p, with the suggested defaults in the middle
+ranger_param <- extract_parameter_set_dials(rwt_ranger) %>% 
+  update(mtry = mtry(range = c(2, (ncol(juice(prep(tidy_rec)))-1)))) %>%
+  update(min_n = min_n(range = c(1, 5)))
+ranger_grid <- grid_latin_hypercube(ranger_param, size=8)
+ranger_grid <- readRDS("RWT model objects/ranger_grid_rwt.rds")
+```
+```{r}
+#| eval: false
+#Tune the model
+rwt_ranger_fit <- tune_grid(
+    rwt_ranger_wf,
+    resamples = tidy_kfolds,
+    grid = ranger_grid,
+    control = ctrl_grid_ranger,
+    metrics = metric_set(rmse))
+```
+```{r}
+rwt_ranger_fit <- readRDS("RWT model objects/rwt_ranger_fit.rds")
+# Resampling results
+rwt_ranger_fit %>% collect_metrics()
+
+# Finalize 
+rwt_ranger_best_tune <- rwt_ranger_fit %>% select_best("rmse")
+rwt_ranger_wf_final <- 
+  rwt_ranger_wf %>% 
+  finalize_workflow(rwt_ranger_best_tune)
+
+# Test Predictions
+rwt_ranger_fit_final <- rwt_ranger_wf_final %>%
+  last_fit(rwt_split, metrics = metric_set(rmse)) 
+
+# Get Predictions
+ranger_predictions <- rwt_ranger_wf_final %>%
+      last_fit(rwt_split, metrics = metric_set(rmse)) %>% 
+      collect_predictions()
+
+# Collect metrics
+rwt_ranger_fit_final %>%
+  collect_metrics()
+
+# Check metrics manually
+test_pred_v_actual_ranger <- cbind(ranger_predictions, rwt_test$FantPt.Future)
+rmse(test_pred_v_actual_ranger, rwt_test$FantPt.Future,.pred)
+
+# Predicted vs. Actual
+ggplot_ranger <- ggplot(test_pred_v_actual_ranger, aes(x=FantPt.Future, y=.pred)) + geom_point() +
+  ggtitle("Predicted vs. Actual on Test Data for Random Forest")+
+  xlab("Actual Fantasy Points")+
+  ylab("Predicted Fantasy Points")+
+  theme(plot.title=element_text(hjust=0.5, face='bold')) +
+  geom_abline(slope = 1, intercept = 0)
+ggplotly(ggplot_ranger)
+
+# Variable Importance
+rwt_ranger_wf_final %>%
+  fit(data = rwt_train) %>%
+  extract_fit_parsnip() %>%
+  vip(geom = "point", num_features = 15)
+
+```
+
+# Random Forest  - Visualizing the fit
+```{r}
+param_names <- list(
+  'min_n'="Min Node Size",
+  'mtry'="Min Predictors at Each Split"
+)
+
+parameter_labeller <- function(variable,value){
+  return(param_names[value])
+}
+
+rwt_ranger_fit %>%
+  collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  select(mean, min_n:mtry) %>%
+  pivot_longer(min_n:mtry,
+               values_to = "value",
+               names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x", labeller=parameter_labeller) +
+  labs(x = NULL, y = "RMSE") +
+  ggtitle("Performance of Hyperparameters for Random Forest")+
+  theme(plot.title=element_text(hjust=0.5, face='bold'))
+```
+
+
+#Variable Importance for Random Forest
+```{r}
+rwt_variableImportance <- rwt_ranger_wf_final %>%
+  fit(data = rwt_train) %>%
+  extract_fit_parsnip() %>%
+  vip::vi() %>%
+  arrange(desc(Importance)) %>%
+  mutate(Variable = case_when(
+    Variable == "FantPtRm" ~ "Fantasy Point Moving Avg",
+    Variable == "ReceivingYdsRm" ~ "Receiving Yards Moving Avg",
+    Variable == "PassTgtRm" ~ "Pass Targets Moving Avg",
+    Variable == "RushingAttRm" ~ "Rushing Attempts Moving Avg",
+    Variable == "OppScoreRm" ~ "Opponent's Score Moving Avg",
+    Variable == "Age" ~ "Age",
+    Variable == "StackedMeanOppReceivingYds" ~ "Opponent's Cumulative Avg of Receiving Yards Allowed",
+    Variable == "RecYdsPerTgtRm" ~ "Receiving Yards / Target Moving Avg",
+    Variable == "RecYdsPerReceptionRm" ~ "Receiving Yards / Reception Moving Avg",
+    Variable == "StackedMeanOppFantPt" ~ "Opponent's Cumulative Avg of Fantasy Points Allowed",
+    Variable == "TeamScoreRm" ~ "Team's Score Moving Avg",
+    Variable == "StackedMeanOppRushingYds" ~ "Opponent's Cumulative Avg of Rushing Yards Allowed",
+    Variable == "CatchPercentageRm" ~ "Catch Percentage Moving Avg",
+    Variable == "DraftRound" ~ "Draft Round",
+    Variable == "AllTDRm" ~ "All Touchdowns Moving Avg",
+    TRUE ~ "Other"
+  ))
+
+  
+  
+rwt_variableImportance_ggplot <-  rwt_variableImportance %>%
+  filter(Variable != "Other") %>% ungroup() %>%
+  dplyr::arrange(desc(Importance))
+
+
+  ggplot(rwt_variableImportance_ggplot)+
+  geom_col(aes(x = reorder(Variable, Importance), y = Importance))+
+  ggtitle("Figure 2B: Variable Importance for\nRandom Forest (RB, WR, TE)")+
+  xlab("Variable")+
+  ylab("Overall Importance")+
+  coord_flip(ylim =c(10000, 42000))+
+  theme(plot.title=element_text(hjust=0.5, face='bold'))
+
+```
+
+## Partial dependence for Random Forest
+```{r}
+pdp.ranger.final <- ranger(FantPt.Future ~ ., data = rwt_train,
+          num.trees       = 2000,
+          mtry            = 5,
+          min.node.size   = 1,
+          respect.unordered.factors = 'order',
+          importance      = 'impurity'
+                           )
+
+p1 <- pdp.ranger.final %>%
+  partial(pred.var = "FantPtRm") %>%
+  autoplot(smooth = TRUE, ylab = 'Fantasy Points for Upcoming Game', xlab = 'Moving Average of Fantasy Points') +
+  theme_bw() +
+  ggtitle("Figure 4A: PDP - Fantasy Point Moving Average for\nRandom Forest (RB, WR, TE)") +
+  theme(plot.title=element_text(hjust=0.5, face='bold'))
+
+p1
+```
+
+
+
+# XGBoost
+```{r}
+rwt_xgboost <- boost_tree(
+                  mode = "regression",
+                  mtry = tune(),
+                  trees = 2000,
+                  min_n = tune(),
+                  tree_depth = tune(),
+                  learn_rate = tune()) %>% ## increase learning rate??
+                  set_engine("xgboost", nthread = 30, importance = "impurity")
+
+# Define parameter grid
+rwt_xgboost_param <- extract_parameter_set_dials(rwt_xgboost) %>% 
+                    update(mtry = mtry(c(2, ncol(juice(prep(tidy_rec)))-1))) %>%
+                    update(min_n = min_n(c(5, 15)))%>%
+                    update(tree_depth = tree_depth(c(3, 8)))
+rwt_xgboost_grid <- grid_max_entropy(
+                  rwt_xgboost_param, 
+                  size = 16)
+rwt_xgboost_grid <- readRDS("RWT model objects/rwt_xgboost_grid.rds")
+
+# Define workflow
+rwt_xgboost_wf <- workflow() %>% 
+                    add_recipe(tidy_rec) %>% 
+                    add_model(rwt_xgboost)
+```
+```{r}
+#| eval: false
+# Tune with resampling
+rwt_xgboost_fit <- tune_grid(rwt_xgboost_wf,
+                            resamples = tidy_kfolds,
+                            grid = rwt_xgboost_grid,
+                            control = ctrl_grid_xgb,
+                            metrics = metric_set(rmse))
+```
+```{r}
+rwt_xgboost_fit <- readRDS("RWT model objects/rwt_xgboost_fit.rds")
+rwt_xgboost_best_tune <- rwt_xgboost_fit %>%
+                              select_best("rmse") 
+rwt_xgboost_best_tune
+
+# Finalize workflow
+rwt_xgboost_final <- rwt_xgboost_wf %>% 
+  finalize_workflow(rwt_xgboost_best_tune)
+```
+```{r}
+# Test Predictions
+rwt_xgboost_fit_final <- rwt_xgboost_final %>%
+  last_fit(rwt_split, metrics = metric_set(rmse)) 
+
+xgboost_predictions <- rwt_xgboost_final %>%
+      last_fit(rwt_split, metrics = metric_set(rmse)) %>% 
+      collect_predictions()
+```
+```{r}
+setwd("C:/Users/delan/Downloads/STAT6341 Sports Analytics/Fantasy Project")
+rwt_xgboost_fit_final <- readRDS("RWT model objects/rwt_xgboost_fit_final.rds")
+xgboost_predictions <- readRDS("RWT model objects/xgboost_predictions_rwt.rds")
+
+# Collect metrics
+rwt_xgboost_fit_final %>%
+  collect_metrics()
+
+# Check metrics manually
+test_pred_v_actual <- data.frame(cbind(xgboost_predictions$FantPt.Future, xgboost_predictions$.pred))
+rmse(test_pred_v_actual, X1,X2)
+
+#
+ggplot(test_pred_v_actual, aes(x=X1, y=X2)) + geom_point() +
+  ggtitle("Predicted vs. Actual on Test Data - XGBoost for rwt")+
+  xlab("Actual Fantasy Points")+
+  ylab("Predicted Fantasy Points")+
+  theme(plot.title=element_text(hjust=0.5, face='bold')) +
+  geom_abline(slope = 1, intercept = 0)
+
+# Variable Importance
+rwt_xgboost_final %>%
+  fit(data = rwt_train) %>%
+  extract_fit_parsnip() %>%
+  vip(geom = "point", num_features = 15)
+
+
+```
+
+
+## Visualize Resampling for XGBoost
+```{r}
+supp.labs <- c("Learning Rate", "Min Node Size","Min Predictors at Each Split","Tree Depth")
+names(supp.labs) <- c("learn_rate", "min_n","mtry","tree_depth")
+
+param_names <- list(
+  'learn_rate'="Learning Rate",
+  'min_n'="Min Node Size",
+  'mtry'="Min Predictors at Each Split",
+  'tree_depth'="Tree Depth"
+)
+
+parameter_labeller <- function(variable,value){
+  return(param_names[value])
+}
+
+rwt_xgboost_fit %>%
+  collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  select(mean, mtry:learn_rate) %>%
+  pivot_longer(mtry:learn_rate,
+               values_to = "value",
+               names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x", labeller=parameter_labeller) +
+  labs(x = NULL, y = "RMSE") +
+  ggtitle("Performance of Hyperparameters for XGBoost")+
+  theme(plot.title=element_text(hjust=0.5, face='bold'))
+```
+
+#Variable Importance for XGBoost
+```{r}
+rwt_variableImportance_xgb <- rwt_xgboost_final %>%
+  fit(data = rwt_train) %>%
+  extract_fit_parsnip() %>%
+  vip::vi() %>%
+  arrange(desc(Importance)) %>%
+  mutate(Variable = case_when(
+    Variable == "FantPtRm" ~ "Fantasy Point Moving Avg",
+    Variable == "RushingAttRm" ~ "Rushing Attempts Moving Avg",
+    Variable == "PassTgtRm" ~ "Pass Targets Moving Avg",
+    Variable == "ReceivingYdsRm" ~ "Receiving Yards Moving Avg",
+    Variable == "DraftRound" ~ "Draft Round",
+    Variable == "Age" ~ "Age",
+    Variable == "StackedMeanOppRushingYds" ~ "Opponent's Cumulative Avg of Rushing Yards Allowed",
+    Variable == "OppScoreRm" ~ "Opponent's Score Moving Avg",
+    Variable == "StackedMeanOppReceivingYds" ~ "Opponent's Cumulative Avg of Receiving Yards Allowed",
+    Variable == "CatchPercentageRm" ~ "Catch Percentage Moving Avg",
+    Variable == "RecYdsPerTgtRm" ~ "Receiving Yards / Target Moving Avg",
+    Variable == "TeamScoreRm" ~ "Team's Score Moving Avg",
+    Variable == "StackedMeanOppFantPt" ~ "Opponent's Cumulative Avg of Fantasy Points Allowed",
+    Variable == "RushingTDRm" ~ "Rushing Touchdown Moving Avg",
+    Variable == "HomeOrAway.Future_Away" ~ "Home Or Away",
+    TRUE ~ "Other"
+  ))
+
+  
+  
+rwt_variableImportance_xgb_ggplot <-  rwt_variableImportance_xgb %>%
+  filter(Variable != "Other") %>% ungroup() %>%
+  dplyr::arrange(desc(Importance))
+
+
+  ggplot(rwt_variableImportance_xgb_ggplot)+
+  geom_col(aes(x = reorder(Variable, Importance), y = Importance))+
+  ggtitle("Figure 2C: Variable Importance for\nXGBoost (RB, WR, TE)")+
+  xlab("Variable")+
+  ylab("Overall Importance")+
+  coord_flip()+
+  theme(plot.title=element_text(hjust=0.5, face='bold'))
+
+```
+
+## Partial dependence for XGBoost
+```{r}
+X <- as.matrix(tidy_juice[,-21])
+Y <- as.numeric(tidy_juice$FantPt.Future)
+pdp.xgb.final <- xgboost(data = X,
+                         label = Y,
+                         nrounds= 1000,
+                         params = list(max_depth = 4,
+                            eta = 0.00214,
+                            min_child_weight = 10,
+                            colsample_bynode = 0.5),
+                            objective = "reg:squarederror",
+                         verbose = 0
+                           )
+
+
+p1 <- pdp.xgb.final %>%
+  partial(pred.var = "FantPtRm", train = X) %>%
+  autoplot(smooth = TRUE, ylab = 'Fantasy Points for Upcoming Game', xlab = 'Moving Average of Fantasy Points') +
+  theme_bw() +
+  ggtitle("Figure 4B: PDP - Fantasy Point Moving Average for\nXGBoost (RB, WR, TE)") +
+  theme(plot.title=element_text(hjust=0.5, face='bold'))
+
+p1
+```
+
+# Check out accuracy of NFL predictions
+```{r}
+rwt_predvactualNFL <- read.csv("rwt_predvactualNFL.csv")
+rwt_predvactualNFL2 <- rwt_predvactualNFL %>% filter(!is.na(W1.Proj) & !is.na(W1.Actual))
+rmse(rwt_predvactualNFL2, W1.Proj,W1.Actual)
+
+qb_predvactualNFL <- read.csv("qb_predvactualNFL.csv")
+qb_predvactualNFL2 <- qb_predvactualNFL %>% filter(!is.na(W1.Proj) & !is.na(W1.Actual))
+rmse(qb_predvactualNFL2, W1.Proj,W1.Actual)
+```
+
+

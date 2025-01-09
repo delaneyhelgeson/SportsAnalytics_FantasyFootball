@@ -1,0 +1,326 @@
+---
+title: "FantasyDBDataCleaning"
+author: "Delaney Helgeson"
+format: 
+  html:
+    self-contained: true
+editor: source
+---
+
+```{r}
+library(DescTools)
+```
+
+## Load Data
+```{r}
+#| warning: false
+# Note: working directory resets after you run the code. MUST RUN ALL CODE AT ONCE
+year <- "2000"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2000 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2000 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2001"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2001 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2001 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+
+year <- "2002"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2002 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2002 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2003"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2003 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2003 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2004"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2004 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2004 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2005"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2005 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2005 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2006"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2006 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2006 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2007"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2007 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2007 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2008"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2008 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2008 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2009"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2009 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2009 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2010"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2010 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2010 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2011"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2011 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2011 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2012"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2012 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2012 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2013"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2013 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2013 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2014"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2014 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2014 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2015"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2015 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+rb_2015 <- read.csv(paste("RB_",year,"_All.csv", sep=''))
+wr_2015 <- read.csv(paste("WR_",year,"_All.csv", sep=''))
+te_2015 <- read.csv(paste("TE_",year,"_All.csv", sep=''))
+injuries_2015 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+
+year <- "2016"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2016 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2016 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2017"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2017 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2017 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2018"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2018 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2018 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+
+```
+
+## Quarter Backs: Feature Extraction
+```{r}
+
+doFeatureExtraction <- function(qb_feat_extract, injuries){
+
+# Replace NAs of certain values with 0. - ie: Completion Percentage becomes 0 if no passes were attempted. 
+# Remove columns that are not of interest to quarterbacks, and removing other FantasyPoint formulas
+qb_feat_extract_0 <- qb_feat_extract %>%
+  dplyr::mutate(CmpPercentage = replace_na(CmpPercentage, 0),
+         TDPercentage = replace_na(TDPercentage, 0),
+         InterceptPercentage = replace_na(InterceptPercentage, 0),
+         YdsLostSacsks = replace_na(YdsLostSacsks, 0),
+         Rate = replace_na(Rate, 0),
+         TimesSacked = replace_na(TimesSacked, 0),
+         SackPercentage =  replace_na(SackPercentage, 0),
+         YdsGainPerPassAtt =  replace_na(YdsGainPerPassAtt, 0),
+         AdjYdsGainPerPassAtt =  replace_na(AdjYdsGainPerPassAtt, 0),
+         AdjNetYdsGainPerPassAtt =  replace_na(AdjNetYdsGainPerPassAtt, 0),
+         YdsGainPerPassCmp =  replace_na(YdsGainPerPassCmp, 0),
+         RecYdsPerRecepetion =  replace_na(RecYdsPerRecepetion, 0),
+         CatchPercentage =  replace_na(CatchPercentage, 0),
+         RecYdsPerTgt =  replace_na(RecYdsPerTgt, 0),
+         RushingsYdsPerAtt =  replace_na(RushingsYdsPerAtt, 0),
+         XPPercent = replace_na(as.numeric(XPPercent), 0),
+         FieldGoalPercentage =  replace_na(FieldGoalPercentage, 0),
+         DraftRound = replace_na(DraftRound, max(qb_feat_extract$DraftRound, na.rm = TRUE) + 1),
+         OverallDraftPick = replace_na(OverallDraftPick, max(qb_feat_extract$OverallDraftPick, 
+                                                             na.rm = TRUE) + 1),
+         ) %>%
+  select(-c("X","Rank","PassTgt","Receptions","ReceivingYds","RecYdsPerRecepetion","ReceivingTD",
+            "CatchPercentage","RecYdsPerTgt","PPR","DKPt","FDPt",
+            "FieldGoalsMade","FieldGoalsAtt","FieldGoalPercentage","Position")) %>%
+  # Exclude games where quarterbacks did not play
+  filter(!is.na(FantPt) & PassesAtt >= 5)
+
+# Convert Dates to Month and Year columns
+# Extract Team/Opp Scores, Overtime T/F
+qb_feat_extract_1 <- qb_feat_extract_0 %>%
+  dplyr::mutate(Month_num = str_split_fixed(Date, "/", 3)[,1],
+         Month = case_when(
+           Month_num == 8 ~ "Aug",
+           Month_num == 9 ~ "Sep",
+           Month_num == 10 ~ "Oct",
+           Month_num == 11 ~ "Nov",
+           Month_num == 12 ~ "Dec",
+           Month_num == 1 ~ "Jan",
+         ),
+         Year = str_split_fixed(Date, "/", 3)[,3],
+         .after = "Date") %>%
+  dplyr::mutate(Overtime = str_detect(Result, " \\(OT\\)"),
+         ResultCut = str_replace(Result, " \\(OT\\)",""),
+         TeamScore = as.numeric(str_split_fixed(str_split_fixed(ResultCut, "-", 2)[,1], " ",2)[,2]),
+         OppScore = as.numeric(str_split_fixed(ResultCut, "-", 2)[,2]),
+         WinLoss = str_split_fixed(ResultCut, " ", 2)[,1],
+    .after = Result
+  ) %>%
+  select(-c("Month_num","Date","Result","ResultCut"))
+  
+
+
+
+# Create column for PlayerGameNumber
+playerGameNums <- qb_feat_extract_1 %>% 
+  group_by(Player) %>%
+  arrange(Week) %>%  
+  dplyr::mutate(PlayerGameNum1 = row_number()) %>%
+  dplyr::select(c("Player","Week","PlayerGameNum1"))
+# Join to main data set
+qb_feat_extract_2 <- qb_feat_extract_1 %>%
+  left_join(., playerGameNums, by = c("Player"="Player", "Week"="Week"),
+            suffix = c("", "")) %>%
+  dplyr::mutate(PlayerGameNum = PlayerGameNum1,
+         .after = Week) %>%
+  dplyr::select(-c("PlayerGameNum1"))
+
+
+
+
+# Shift fantasy points to next game 
+qb_feat_extract_3 <- qb_feat_extract_2 %>%
+  dplyr::mutate(FuturePlayerGameNum = PlayerGameNum + 1,
+         .after = PlayerGameNum) 
+
+qb_feat_extract_3_copy <- qb_feat_extract_3
+qb_feat_extract_4 <- qb_feat_extract_3 %>%
+  full_join(., qb_feat_extract_3_copy[,c("Player","PlayerGameNum","FantPt","Day","Month","Team",
+                                 "HomeOrAway","Opponent","PassesAtt","PassesComp","CmpPercentage",
+                                 "YdsGainPerPassAtt","PassingYds")], 
+            by = c("FuturePlayerGameNum" = "PlayerGameNum", "Player" = "Player"), 
+             suffix = c("", ".Future1")) %>%
+  dplyr::mutate(FantPt.Future = FantPt.Future1,
+                Day.Future = Day.Future1,
+                Month.Future = Month.Future1,
+                Team.Future = Team.Future1,
+                HomeOrAway.Future = HomeOrAway.Future1,
+                Opponent.Future = Opponent.Future1,
+                PassesAtt.Future = PassesAtt.Future1,
+                PassesComp.Future = PassesComp.Future1,
+                CmpPercentage.Future = CmpPercentage.Future1,
+                YdsGainPerPassAtt.Future = YdsGainPerPassAtt.Future1,
+                PassingYds.Future = PassingYds.Future1,
+         .after = FantPt) %>%
+  select(-c("FantPt.Future1","Day.Future1","Month.Future1","Team.Future1","HomeOrAway.Future1",
+            "Opponent.Future1","PassesAtt.Future1","PassesComp.Future1","CmpPercentage.Future1",
+            "YdsGainPerPassAtt.Future1","PassingYds.Future1")) %>%
+  filter(FuturePlayerGameNum != 1 & !is.na(FantPt.Future)) %>% ungroup()
+
+
+qb_feat_extract_5 <- qb_feat_extract_4 %>%
+  dplyr::arrange(Week, Opponent.Future)
+
+
+
+# Get Opponent's past performance 
+opp_qb <- qb_feat_extract_5 %>%
+  dplyr::arrange(Opponent.Future, Week) %>%
+  group_by(Opponent.Future, Week) %>%
+  dplyr::summarise(MeanOppFantPt = mean(FantPt, na.rm = TRUE),
+                   MeanOppPassingYds = mean(PassingYds, na.rm = TRUE)) %>%
+  dplyr::mutate(StackedMeanOppFantPt = dplyr::cummean(MeanOppFantPt),
+                StackedMeanOppPassingYds = dplyr::cummean(MeanOppPassingYds)) %>%
+  select(-c("MeanOppFantPt","MeanOppPassingYds"))
+
+qb_feat_extract_6 <- qb_feat_extract_5 %>%
+  left_join(., opp_qb, by = c("Opponent.Future" = "Opponent.Future","Week" = "Week"), suffix = c("",""))
+
+new_injuries <- injuries %>%
+  mutate(Injuries = as.character(Injuries),
+    bodypart = dplyr::case_when(
+    str_detect(Injuries, regex('shoulder',ignore_case = T)) ~ "Shoulder",
+    str_detect(Injuries, regex('Back',ignore_case = T)) ~ "Back",
+    str_detect(Injuries, regex('Chest|rib',ignore_case = T)) ~ "Chest/Rib",
+    str_detect(Injuries, regex('Stinger',ignore_case = T)) ~ "Stinger",
+    str_detect(Injuries, regex('Hamstring|Quadricep|Thigh|Glute',ignore_case = T)) ~ "Thigh",
+    str_detect(Injuries, regex('Groin|Hip',ignore_case = T)) ~ "Hip",
+    str_detect(Injuries, regex('Calf|Fibula|Shin|Lower Leg',ignore_case = T)) ~ "Lower Leg",
+    str_detect(Injuries, regex('Knee',ignore_case = T)) ~ "Knee",
+    str_detect(Injuries, regex('Foot|Achilles|Toe|Ankle',ignore_case = T)) ~ "Foot/Ankle",
+    str_detect(Injuries, regex('Elbow|Arm|Bicep|Forearm',ignore_case = T)) ~ "Arm",
+    str_detect(Injuries, regex('Hand|Wrist|Finger|Thumb',ignore_case = T)) ~ "Hand",
+    str_detect(Injuries, regex('Concussion|Head|Ear',ignore_case = T)) ~ "Head",
+    TRUE ~ "Other"
+))
+
+# Add column for if the player is returning from an injury
+injuries_1 <- new_injuries %>%
+  filter(Game.Status != "") %>%
+  dplyr::mutate(NextWeek = Week + 1,
+                Player = as.character(Player))
+
+qb_feat_extract_7 <- qb_feat_extract_6 %>%
+  left_join(., injuries_1[,c("Player","NextWeek","Game.Status","bodypart")], 
+            by=c("Player" = "Player", "Week" = "NextWeek"), suffix = c("","")) %>%
+  mutate(RecentInjury = ifelse(!is.na(Game.Status), "Y","N"),
+         InjuredBodyPart = ifelse(!is.na(Game.Status), bodypart, "N")) %>%
+  select(-c("Game.Status","bodypart"))
+
+
+qb_feat_extract_8 <- qb_feat_extract_7 %>%
+  dplyr::mutate(HomeOrAway.Future = ifelse(HomeOrAway.Future == "", "Home","Away")
+                #,Overtime = as.character(Overtime)
+                ) %>%
+  select(-c("Day","Month","Overtime"))
+
+return(qb_feat_extract_8)
+
+}
+
+
+```
+
+
+
+# Compile Data from All Years
+```{r}
+
+
+qb_All <- data.frame()
+
+qb_temp <- doFeatureExtraction(qb_2018, injuries_2018)
+any(is.na(qb_temp))
+qb_All <- rbind(qb_All, qb_temp)
+
+setwd("C:/Users/delan/Downloads/STAT6341 Sports Analytics/Fantasy Project")
+write.csv(qb_All, "qb_All_ready_for_dashboard_passAttgte5.csv")
+
+```

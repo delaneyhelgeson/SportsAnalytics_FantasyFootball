@@ -1,0 +1,1170 @@
+---
+title: "FantasyModelingQB"
+author: "Delaney Helgeson"
+format: 
+  html:
+    self-contained: true
+editor: source
+---
+
+## Load Libraries
+```{r}
+#| message: false
+#| warning: false
+library(zoo)
+library(dplyr)
+library(tidyverse)
+library(tidymodels)
+library(ggplot2)
+library(stacks)
+library(vip)
+library(plotly)
+```
+
+## Load Data
+```{r}
+#| warning: false
+# Note: working directory resets after you run the code. MUST RUN ALL CODE AT ONCE
+year <- "2000"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2000 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2000 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2001"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2001 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2001 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+
+year <- "2002"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2002 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2002 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2003"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2003 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2003 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2004"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2004 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2004 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2005"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2005 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2005 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2006"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2006 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2006 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2007"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2007 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2007 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2008"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2008 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2008 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2009"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2009 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2009 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2010"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2010 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2010 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2011"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2011 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2011 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2012"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2012 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2012 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2013"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2013 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2013 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2014"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2014 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2014 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2015"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2015 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+rb_2015 <- read.csv(paste("RB_",year,"_All.csv", sep=''))
+wr_2015 <- read.csv(paste("WR_",year,"_All.csv", sep=''))
+te_2015 <- read.csv(paste("TE_",year,"_All.csv", sep=''))
+injuries_2015 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+
+year <- "2016"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2016 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2016 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2017"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2017 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2017 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+year <- "2018"
+setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2018 <- read.csv(paste("QB_",year,"_All.csv", sep=''))
+injuries_2018 <- read.csv(paste("injuries_",year,".csv", sep=''))
+
+
+```
+
+# Quarter Backs: Feature Extraction
+```{r}
+
+doFeatureExtraction <- function(qb_feat_extract, injuries, rolls = 3){
+
+# Replace NAs of certain values with 0. - ie: Completion Percentage becomes 0 if no passes were attempted. 
+# Remove columns that are not of interest to quarterbacks, and removing other FantasyPoint formulas
+qb_feat_extract_0 <- qb_feat_extract %>%
+  dplyr::mutate(CmpPercentage = replace_na(CmpPercentage, 0),
+         TDPercentage = replace_na(TDPercentage, 0),
+         InterceptPercentage = replace_na(InterceptPercentage, 0),
+         YdsLostSacsks = replace_na(YdsLostSacsks, 0),
+         Rate = replace_na(Rate, 0),
+         TimesSacked = replace_na(TimesSacked, 0),
+         SackPercentage =  replace_na(SackPercentage, 0),
+         YdsGainPerPassAtt =  replace_na(YdsGainPerPassAtt, 0),
+         AdjYdsGainPerPassAtt =  replace_na(AdjYdsGainPerPassAtt, 0),
+         AdjNetYdsGainPerPassAtt =  replace_na(AdjNetYdsGainPerPassAtt, 0),
+         YdsGainPerPassCmp =  replace_na(YdsGainPerPassCmp, 0),
+         RecYdsPerRecepetion =  replace_na(RecYdsPerRecepetion, 0),
+         CatchPercentage =  replace_na(CatchPercentage, 0),
+         RecYdsPerTgt =  replace_na(RecYdsPerTgt, 0),
+         RushingsYdsPerAtt =  replace_na(RushingsYdsPerAtt, 0),
+         XPPercent = replace_na(as.numeric(XPPercent), 0),
+         FieldGoalPercentage =  replace_na(FieldGoalPercentage, 0),
+         DraftRound = replace_na(DraftRound, max(qb_feat_extract$DraftRound, na.rm = TRUE) + 1),
+         OverallDraftPick = replace_na(OverallDraftPick, max(qb_feat_extract$OverallDraftPick, 
+                                                             na.rm = TRUE) + 1),
+         ) %>%
+  select(-c("X","Rank","PassTgt","Receptions","ReceivingYds","RecYdsPerRecepetion","ReceivingTD",
+            "CatchPercentage","RecYdsPerTgt","PPR","DKPt","FDPt",
+            "FieldGoalsMade","FieldGoalsAtt","FieldGoalPercentage","Position")) %>%
+  # Exclude games where quarterbacks did not play
+  filter(!is.na(FantPt) & PassesAtt >= 5)
+
+# Convert Dates to Month and Year columns
+# Extract Team/Opp Scores, Overtime T/F
+qb_feat_extract_1 <- qb_feat_extract_0 %>%
+  dplyr::mutate(Month_num = str_split_fixed(Date, "/", 3)[,1],
+         Month = case_when(
+           Month_num == 8 ~ "Aug",
+           Month_num == 9 ~ "Sep",
+           Month_num == 10 ~ "Oct",
+           Month_num == 11 ~ "Nov",
+           Month_num == 12 ~ "Dec",
+           Month_num == 1 ~ "Jan",
+         ),
+         Year = str_split_fixed(Date, "/", 3)[,3],
+         .after = "Date") %>%
+  dplyr::mutate(Overtime = str_detect(Result, " \\(OT\\)"),
+         ResultCut = str_replace(Result, " \\(OT\\)",""),
+         TeamScore = as.numeric(str_split_fixed(str_split_fixed(ResultCut, "-", 2)[,1], " ",2)[,2]),
+         OppScore = as.numeric(str_split_fixed(ResultCut, "-", 2)[,2]),
+         WinLoss = str_split_fixed(ResultCut, " ", 2)[,1],
+    .after = Result
+  ) %>%
+  select(-c("Month_num","Date","Result","ResultCut"))
+  
+
+
+
+# Create column for PlayerGameNumber
+playerGameNums <- qb_feat_extract_1 %>% 
+  group_by(Player) %>%
+  arrange(Week) %>%  
+  dplyr::mutate(PlayerGameNum1 = row_number()) %>%
+  dplyr::select(c("Player","Week","PlayerGameNum1"))
+# Join to main data set
+qb_feat_extract_2 <- qb_feat_extract_1 %>%
+  left_join(., playerGameNums, by = c("Player"="Player", "Week"="Week"),
+            suffix = c("", "")) %>%
+  dplyr::mutate(PlayerGameNum = PlayerGameNum1,
+         .after = Week) %>%
+  dplyr::select(-c("PlayerGameNum1"))
+
+
+
+
+# Shift fantasy points to next game 
+qb_feat_extract_3 <- qb_feat_extract_2 %>%
+  dplyr::mutate(FuturePlayerGameNum = PlayerGameNum + 1,
+         .after = PlayerGameNum) 
+
+qb_feat_extract_3_copy <- qb_feat_extract_3
+qb_feat_extract_4 <- qb_feat_extract_3 %>%
+  full_join(., qb_feat_extract_3_copy[,c("Player","PlayerGameNum","FantPt","Day","Month","Team",
+                                 "HomeOrAway","Opponent")], 
+            by = c("FuturePlayerGameNum" = "PlayerGameNum", "Player" = "Player"), 
+             suffix = c("", ".Future1")) %>%
+  dplyr::mutate(FantPt.Future = FantPt.Future1,
+                Day.Future = Day.Future1,
+                Month.Future = Month.Future1,
+                Team.Future = Team.Future1,
+                HomeOrAway.Future = HomeOrAway.Future1,
+                Opponent.Future = Opponent.Future1,
+         .after = FantPt) %>%
+  select(-c("FantPt.Future1","Day.Future1","Month.Future1","Team.Future1","HomeOrAway.Future1","Opponent.Future1")) %>%
+  filter(FuturePlayerGameNum != 1 & !is.na(FantPt.Future)) %>% ungroup()
+
+
+# Calculate Rolling Means for PlayerGameNumbers > k (added suffix "rm" to column names)
+# Using the data from the first k games to predict the game outcome of the (k+1)th game
+# rolling mean is calculated using the ith, (i-1)th, and (i-2)th game for k = 3
+rolling_means <- qb_feat_extract_4 %>%
+  dplyr::arrange(Player) %>%
+  group_by(Player) %>% 
+  dplyr::arrange(PlayerGameNum, .by_group = TRUE) %>%
+  dplyr::mutate(PlayerGameNum = PlayerGameNum,
+                #PassingYds = PassingYds,
+         FantPtRm = rollmean(FantPt, k=rolls, fill=NA, align="right"),
+         TeamScoreRm = rollmean(TeamScore, k=rolls, fill=NA, align="right"),
+         # Note, this is not the opponent's rolling mean, this is how opponents of the team of interest
+         # typically score
+         OppScoreRm = rollmean(OppScore, k=rolls, fill=NA, align="right"), 
+         PassesCompRm = rollmean(PassesComp, k=rolls, fill=NA, align="right"),
+         PassesAttRm = rollmean(PassesAtt, k=rolls, fill=NA, align="right"),
+         PassesIncRm = rollmean(PassesInc, k=rolls, fill=NA, align="right"),
+         CmpPercentageRm = rollmean(CmpPercentage, k=rolls, fill=NA, align="right"),
+         PassingYdsRm = rollmean(PassingYds, k=rolls, fill=NA, align="right"),
+         PassingTDRm = rollmean(PassingTD, k=rolls, fill=NA, align="right"),
+         InterceptThrownRm = rollmean(InterceptThrown, k=rolls, fill=NA, align="right"),
+         Pick6Rm = rollmean(Pick6, k=rolls, fill=NA, align="right"),
+         TDPercentageRm = rollmean(TDPercentage, k=rolls, fill=NA, align="right"),
+         InterceptPercentageRm = rollmean(InterceptPercentage, k=rolls, fill=NA, align="right"),
+         RateRm = rollmean(Rate, k=rolls, fill=NA, align="right"),
+         TimesSackedRm = rollmean(TimesSacked, k=rolls, fill=NA, align="right"),
+         YdsLostSacksRm = rollmean(YdsLostSacsks, k=rolls, fill=NA, align="right"),
+         SackPercentageRm = rollmean(SackPercentage, k=rolls, fill=NA, align="right"),
+         YdsGainPerPassAttRm = rollmean(YdsGainPerPassAtt, k=rolls, fill=NA, align="right"),
+         AdjYdsGainPerPassAttRm = rollmean(AdjYdsGainPerPassAtt, k=rolls, fill=NA, align="right"),
+         AdjNetYdsGainPerPassAttRm = rollmean(AdjNetYdsGainPerPassAtt, k=rolls, fill=NA, align="right"),
+         YdsGainPerPassCmpRm = rollmean(YdsGainPerPassCmp, k=rolls, fill=NA, align="right"),
+         FmbRm = rollmean(Fmb, k=rolls, fill=NA, align="right"),
+         FmbRecoveredRm = rollmean(FmbRecovered, k=rolls, fill=NA, align="right"),
+         YdsFmbRecoveredRm = rollmean(YdsFmbRecovered, k=rolls, fill=NA, align="right"),
+         FmbRecovTDRm = rollmean(FmbRecovTD, k=rolls, fill=NA, align="right"),
+         ForcedFmbRm = rollmean(ForcedFmb, k=rolls, fill=NA, align="right"),
+         RushingAttRm = rollmean(RushingAtt, k=rolls, fill=NA, align="right"),
+         RushingYdsRm = rollmean(RushingYds, k=rolls, fill=NA, align="right"),
+         RushingYdsPerAttRm = rollmean(RushingsYdsPerAtt, k=rolls, fill=NA, align="right"),
+         RushingTDRm = rollmean(RushingTD, k=rolls, fill=NA, align="right"),
+         AllTDRm = rollmean(AllTD, k=rolls, fill=NA, align="right"),
+         XPMRm = rollmean(XPM, k=rolls, fill=NA, align="right"),
+         XPARm = rollmean(XPA, k=rolls, fill=NA, align="right"),
+         XPPercentRm = rollmean(XPPercent, k=rolls, fill=NA, align="right"),
+         PC2Rm = rollmean(PC2, k=rolls, fill=NA, align="right"),
+         SftyRm = rollmean(Sfty, k=rolls, fill=NA, align="right"),
+         AllPtsRm = rollmean(AllPts, k=rolls, fill=NA, align="right"),
+         )  %>%
+  filter(PlayerGameNum >= rolls)
+
+
+# Add cumulative average for GameNum < k
+cumulative_means <- qb_feat_extract_4 %>%
+  dplyr::arrange(Player) %>%
+  group_by(Player) %>% 
+  dplyr::arrange(PlayerGameNum, .by_group = TRUE) %>%
+  filter(PlayerGameNum < rolls) %>%
+  dplyr::mutate(PlayerGameNum = PlayerGameNum,
+                #PassingYds = PassingYds,
+                FantPtRm = dplyr::cummean(FantPt),
+                TeamScoreRm = dplyr::cummean(TeamScore),
+                OppScoreRm = dplyr::cummean(OppScore),
+                PassesCompRm = dplyr::cummean(PassesComp),
+                PassesAttRm = dplyr::cummean(PassesAtt),
+                PassesIncRm = dplyr::cummean(PassesInc),
+                CmpPercentageRm = dplyr::cummean(CmpPercentage),
+                PassingYdsRm = dplyr::cummean(PassingYds),
+                PassingTDRm = dplyr::cummean(PassingTD),
+                InterceptThrownRm = dplyr::cummean(InterceptThrown),
+                Pick6Rm = dplyr::cummean(Pick6),
+                TDPercentageRm = dplyr::cummean(TDPercentage),
+                InterceptPercentageRm = dplyr::cummean(InterceptPercentage),
+                RateRm = dplyr::cummean(Rate),
+                TimesSackedRm = dplyr::cummean(TimesSacked),
+                YdsLostSacksRm = dplyr::cummean(YdsLostSacsks),
+                SackPercentageRm = dplyr::cummean(SackPercentage),
+                YdsGainPerPassAttRm = dplyr::cummean(YdsGainPerPassAtt),
+                AdjYdsGainPerPassAttRm = dplyr::cummean(AdjYdsGainPerPassAtt),
+                AdjNetYdsGainPerPassAttRm = dplyr::cummean(AdjNetYdsGainPerPassAtt),
+                YdsGainPerPassCmpRm = dplyr::cummean(YdsGainPerPassCmp),
+                FmbRm = dplyr::cummean(Fmb),
+                FmbRecoveredRm = dplyr::cummean(FmbRecovered),
+                YdsFmbRecoveredRm = dplyr::cummean(YdsFmbRecovered),
+                FmbRecovTDRm = dplyr::cummean(FmbRecovTD),
+                ForcedFmbRm  = dplyr::cummean(ForcedFmb),
+                RushingAttRm = dplyr::cummean(RushingAtt),
+                RushingYdsRm = dplyr::cummean(RushingYds),
+                RushingYdsPerAttRm = dplyr::cummean(RushingsYdsPerAtt),
+                RushingTDRm = dplyr::cummean(RushingTD),
+                AllTDRm = dplyr::cummean(AllTD),
+                XPMRm = dplyr::cummean(XPM),
+                XPARm = dplyr::cummean(XPA),
+                XPPercentRm = dplyr::cummean(XPPercent),
+                PC2Rm = dplyr::cummean(PC2),
+                SftyRm = dplyr::cummean(Sfty),
+                AllPtsRm = dplyr::cummean(AllPts))
+
+# combine rolling and cumulative means
+rolling_and_cumulative_means <- rbind(cumulative_means, rolling_means)
+
+# Delete columns for individual game values - not needed after rolling mean calculations
+qb_colnames <- c("TeamScore","OppScore","PassesComp","PassesAtt","PassesInc","CmpPercentage","PassingTD",
+                 "InterceptThrown","Pick6","TDPercentage","InterceptPercentage","Rate","TimesSacked",
+                 "YdsLostSacsks","SackPercentage","YdsGainPerPassAtt","AdjYdsGainPerPassAtt",
+                 "AdjNetYdsGainPerPassAtt","YdsGainPerPassCmp","Fmb","ForcedFmb","FmbRecovered",
+                 "YdsFmbRecovered","FmbRecovTD","ForcedFmb","RushingYds","RushingAtt","RushingsYdsPerAtt",
+                 "RushingTD","AllTD","XPM","XPA","XPPercent","PC2","Sfty","AllPts")
+
+qb_feat_extract_5 <- rolling_and_cumulative_means %>%
+  select(-all_of(qb_colnames)) %>%
+  dplyr::arrange(Week, Opponent.Future)
+
+#qb_feat_extract_5 <- qb_feat_extract_4 %>%
+#  left_join(., rolling_means, by = c("Player" = "Player", "PlayerGameNum" = "PlayerGameNum"),
+#            suffix = c("","")) %>%
+#  #filter(PlayerGameNum != 1 & PlayerGameNum != 2) %>%
+#  dplyr::select(-all_of(qb_colnames))
+
+
+# Get Opponent's past performance 
+opp_qb <- qb_feat_extract_5 %>%
+  dplyr::arrange(Opponent.Future, Week) %>%
+  group_by(Opponent.Future, Week) %>%
+  dplyr::summarise(MeanOppFantPt = mean(FantPt, na.rm = TRUE),
+                   MeanOppPassingYds = mean(PassingYds, na.rm = TRUE)) %>%
+  dplyr::mutate(StackedMeanOppFantPt = dplyr::cummean(MeanOppFantPt),
+                StackedMeanOppPassingYds = dplyr::cummean(MeanOppPassingYds)) %>%
+  select(-c("MeanOppFantPt","MeanOppPassingYds"))
+
+qb_feat_extract_6 <- qb_feat_extract_5 %>%
+  left_join(., opp_qb, by = c("Opponent.Future" = "Opponent.Future","Week" = "Week"), suffix = c("",""))
+# Add column for if the player is returning from an injury
+injuries_1 <- injuries %>%
+  filter(Game.Status != "") %>%
+  dplyr::mutate(NextWeek = Week + 1,
+                Player = as.character(Player))
+
+qb_feat_extract_7 <- qb_feat_extract_6 %>%
+  left_join(., injuries_1[,c("Player","NextWeek","Game.Status")], 
+            by=c("Player" = "Player", "Week" = "NextWeek"), suffix = c("","")) %>%
+  mutate(RecentInjury = ifelse(!is.na(Game.Status), "Y","N")) %>%
+  select(-c("Game.Status"))
+
+
+qb_feat_extract_8 <- qb_feat_extract_7 %>%
+  dplyr::mutate(HomeOrAway.Future = ifelse(HomeOrAway.Future == "", "Home","Away")
+                #,Overtime = as.character(Overtime)
+                ) %>%
+  select(-c("FantPt","Day","Month","Team","HomeOrAway","Opponent","Overtime","PassingYds"))
+
+return(qb_feat_extract_8)
+
+}
+
+
+```
+
+# Compile Data from All Years
+```{r}
+
+
+qb_All <- data.frame()
+
+# To perform feature extraction, pass each data frame object to the 
+# function and append it to a common dataframe. 
+# Couldn't put this into a loop because I haven't figured out how to iterate
+# through multiple data frames in R.
+qb_temp <- doFeatureExtraction(qb_2018, injuries_2018, rolls = 5)
+any(is.na(qb_temp))
+qb_All <- rbind(qb_All, qb_temp)
+
+setwd("C:/Users/delan/Downloads/STAT6341 Sports Analytics/Fantasy Project")
+write.csv(qb_All, "qb_All_ready_for_modeling_k_7_passAttgte5.csv")
+
+```
+
+## Generating a Game Id to match with injuries (Might not need this, just for reference)
+```{r, eval=FALSE}
+# vlookup opponent alias
+all_games_2021_alias <- all_games_2021 %>%
+  left_join(., cities_df, by = c("Opp" = "Full_Name")) %>%
+  rowwise %>%
+  mutate(minTeam = min(Team, Alias),
+         maxTeam = max(Team, Alias))
+
+
+# Create unique Identifier
+all_games_2021_Id <- all_games_2021_alias %>%
+  mutate(ID = gsub(" ","",paste(Week, Day, Date, minTeam, maxTeam)),
+         .before = Team)
+```
+
+
+# MODELING Starts Here
+```{r}
+# Pull data for k = 2, 3, 4, 5
+setwd("C:/Users/delan/Downloads/STAT6341 Sports Analytics/Fantasy Project")
+qb_All <- read_csv("qb_All_ready_for_modeling_k_5_passAttgte5.csv")
+
+# Remove irrelevant (to modeling) columns 
+qb_All_1 <- qb_All %>% ungroup() %>%
+  dplyr::select(-c("...1","Player","GameNum","Week","PlayerGameNum","FuturePlayerGameNum",
+                   "WinLoss"))
+
+```
+
+## Split for Validation
+```{r}
+# Train/Validation splits
+qb_split <- make_splits(
+  qb_All_1 %>% filter(Year < 2017),
+  qb_All_1 %>% filter(Year==2017))
+
+qb_train <- training(qb_split) %>% select(-c("Year","Team.Future","Opponent.Future"))
+qb_validation <- testing(qb_split) %>% select(-c("Year","Team.Future","Opponent.Future"))
+
+```
+
+## Recipe for Validation
+```{r}
+# Create recipe
+tidy_rec <- recipe(FantPt.Future ~ ., data = qb_train) %>%
+                step_nzv(all_predictors()) %>%
+                step_corr(all_predictors(), -all_nominal()) %>%
+                step_lincomb(all_predictors(), -all_nominal()) %>%
+                step_center(all_predictors(), -all_nominal()) %>% 
+                step_scale(all_predictors(), -all_nominal()) %>% 
+                step_ns(all_numeric_predictors(), deg_free = 3) %>%
+                step_dummy(all_nominal(), one_hot = FALSE)
+
+# Prep
+tidy_prep <- prep(tidy_rec)
+
+tidy_juice <- juice(tidy_prep)
+
+set.seed(123)
+tidy_kfolds <- vfold_cv(qb_train, v = 5, repeats = 5)
+
+##To save_ all predictions
+ctrl_res_validation <- control_stack_resamples()
+
+```
+
+
+## Fit Linear Regression  (Validation)
+```{r}
+qb_lm <- linear_reg() %>% 
+                  set_mode("regression") %>%
+                  set_engine("lm") 
+
+#Specify modeling procedure
+qb_wf <- workflow() %>% 
+            add_recipe(tidy_rec) %>% 
+            add_model(qb_lm)
+
+# For resampling
+set.seed(6341)
+qb_lm_fit_rs <- fit_resamples(
+  qb_wf,
+  resamples = tidy_kfolds,
+  metrics = metric_set(rmse),
+  control = ctrl_res_validation)
+
+# fit on full training set
+qb_lm_fit <- fit(qb_wf, data= qb_train)
+
+
+
+##Validation performance
+qb_wf %>%
+      last_fit(qb_split, metrics = metric_set(rmse)) %>% 
+      collect_metrics()
+```
+## Split for Training/Testing
+```{r}
+# Train/Test splits
+qb_split <- make_splits(
+  qb_All_1 %>% filter(Year < 2018),
+  qb_All_1 %>% filter(Year==2018))
+
+qb_train <- training(qb_split) %>% select(-c("Year","Team.Future","Opponent.Future"))
+qb_test <- testing(qb_split) %>% select(-c("Year","Team.Future","Opponent.Future"))
+
+```
+
+
+# Recipe for Linear Models
+```{r}
+# Create recipe
+tidy_rec <- recipe(FantPt.Future ~ ., data = qb_train) %>%
+                step_nzv(all_predictors()) %>%
+                step_corr(all_predictors(), -all_nominal()) %>%
+                step_lincomb(all_predictors(), -all_nominal()) %>%
+                step_center(all_predictors(), -all_nominal()) %>% 
+                step_scale(all_predictors(), -all_nominal()) %>% 
+                step_ns(all_numeric_predictors(), deg_free = 3) %>%
+                step_dummy(all_nominal(), one_hot = FALSE)
+
+# Prep
+tidy_prep <- prep(tidy_rec)
+
+tidy_juice <- juice(tidy_prep)
+
+set.seed(123)
+tidy_kfolds <- vfold_cv(qb_train, v = 5, repeats = 5)
+
+##To save_ all predictions
+ctrl_grid_glmnet <- control_stack_grid()
+ctrl_res <- control_stack_resamples()
+
+```
+
+# Fit Linear Regression
+```{r}
+
+qb_lm <- linear_reg() %>% 
+                  set_mode("regression") %>%
+                  set_engine("lm") 
+
+#Specify modeling procedure
+qb_wf <- workflow() %>% 
+            add_recipe(tidy_rec) %>% 
+            add_model(qb_lm)
+
+# For resampling
+set.seed(6341)
+qb_lm_fit_rs <- fit_resamples(
+  qb_wf,
+  resamples = tidy_kfolds,
+  metrics = metric_set(rmse),
+  control = ctrl_res)
+
+# fit on full training set
+qb_lm_fit <- fit(qb_wf, data= qb_train)
+coefficients <- tidy(qb_lm_fit)
+
+
+##Test performance
+predictions <- qb_wf %>%
+      last_fit(qb_split, metrics = metric_set(rmse)) %>% 
+      collect_predictions()
+
+##Test performance
+qb_wf %>%
+      last_fit(qb_split, metrics = metric_set(rmse)) %>% 
+      collect_metrics()
+
+
+training_preds_actual <- data.frame(cbind(predictions$FantPt.Future, predictions$.pred))
+
+plot(predictions$FantPt.Future, predictions$.pred)
+abline(a=0, b=1)
+
+
+
+rmse(training_preds_actual, X1,X2)
+
+lil_test_data <- qb_test[2,]
+lil_test_data$FantPt.Future <- 0
+
+training_preds <- predict(qb_lm_fit, lil_test_data)
+#training_preds_actual <- cbind(training_preds, qb_train$FantPt.Future)
+
+#rmse(training_preds_actual, qb_train$FantPt.Future,.pred)
+
+mygg<- ggplot(training_preds_actual, aes(x=X1, y=X2)) + geom_point() +
+  ggtitle("Figure 5: Predicted vs. Actual on Test Data for\nLinear Regression (QB)")+
+  xlab("Actual Fantasy Points")+
+  ylab("Predicted Fantasy Points")+
+  theme(plot.title=element_text(hjust=0.5, face='bold')) +
+  geom_abline(slope = 1, intercept = 0)
+
+ggplotly(mygg)
+mygg
+```
+
+
+```{r}
+# Extract resampled estiamte
+base_linear_resamples <- c()
+for(i in 1:25){
+  base_linear_resamples <- append(base_linear_resamples, qb_lm_fit_rs$.metrics[[i]]$.estimate)
+}
+```
+
+# Psuedo Variable Importance for Linear Regression
+```{r}
+psuedoVarImp <- coefficients %>%
+  mutate(pvarImp = abs(statistic)) %>%
+  dplyr::arrange(desc(pvarImp)) %>%
+  filter(term != "(Intercept)") %>%
+  select(c("term","pvarImp"))  %>%
+  dplyr::slice(1:15)
+
+
+rwt_variableImportance <- psuedoVarImp %>%
+  mutate(term = case_when(
+    term == "HomeOrAway.Future_Home" ~ "Home Or Away",
+    term == "Month.Future_Sep" ~ "Month: September",
+    term == "StackedMeanOppPassingYds_ns_2" ~ "Opponent's Cumulative Avg of Passing Yards Allowed NS # 2",
+    term == "RushingAttRm_ns_3" ~ "Rushing Attempts Moving Avg NS #3",
+    term == "StackedMeanOppPassingYds_ns_3" ~ "Opponent's Cumulative Avg of Passing Yards Allowed NS # 3",
+    term == "Month.Future_Nov" ~ "Month: November",
+    term == "RushingAttRm_ns_2" ~ "Rushing Attempts Moving Avg NS #2",
+    term == "Age_ns_1" ~ "Age NS #1",
+    term == "TeamScoreRm_ns_1" ~ "Team's Score Moving Avg NS #1",
+    term == "FmbRm_ns_1" ~ "Fumbles Moving Avg NS #1",
+    term == "Month.Future_Jan" ~ "Month: January",
+    term == "Month.Future_Oct" ~ "Month: October",
+    term == "StackedMeanOppFantPt_ns_3" ~ "Opponent's Cumulative Avg of Fantasy Points Allowed NS # 3",
+    term == "PassingYdsRm_ns_1"  ~ "Passing Yards Moving Avg NS #1",
+    term == "PassingYdsRm_ns_3"  ~ "Passing Yards Moving Avg NS #3",
+    TRUE ~ "Other"
+  ))
+#ylim =c(10000, 42000)
+  
+  
+rwt_variableImportance_ggplot <-  data.frame(rwt_variableImportance %>%
+  filter(term != "Other") %>% ungroup() %>%
+  dplyr::arrange(desc(pvarImp)))
+
+
+  ggplot(rwt_variableImportance_ggplot)+
+  geom_col(aes(x = reorder(term, pvarImp), y = pvarImp))+
+  ggtitle("Figure 1A: Variable Importance for\nLinear Regression (QB)")+
+  xlab("Variable")+
+  ylab("Absolute Value of Test Statistic")+
+  coord_flip()+
+  theme(plot.title=element_text(hjust=0.5, face='bold'))
+
+```
+
+
+# Penalized Regression
+```{r}
+# Define model
+qb_glmnet <- linear_reg(
+  penalty = tune(), 
+  mixture = tune()) %>% 
+  set_mode("regression") %>%
+  set_engine("glmnet", seed=3341, nthread=6) 
+
+#Specify modeling procedure
+qb_glmnet_wf <- workflow() %>% 
+  add_recipe(tidy_rec) %>% 
+  add_model(qb_glmnet)
+
+# set parameter grid
+glmnet_grid <- grid_max_entropy(
+  extract_parameter_set_dials(qb_glmnet), 
+  size = 12)
+
+# tune resamples
+qb_glmnet_fit <- tune_grid(
+  qb_glmnet_wf,
+  resamples = tidy_kfolds,
+  grid = glmnet_grid,
+  control = ctrl_grid_glmnet,
+  metrics = metric_set(rmse))
+
+
+qb_glmnet_best_tune <- qb_glmnet_fit %>% select_best("rmse")
+
+#Note that we need to update our workflow
+qb_glmnet_final_wf <- qb_glmnet_wf %>% 
+                        finalize_workflow(qb_glmnet_best_tune) # must pass optimal tuning parameter
+qb_glmnet_final_wf # tells you what the model is. 
+
+##Extract coefficients
+qb_glmnet_final_wf %>% 
+  fit(qb_train) %>% # fit the model to training data
+  pull_workflow_fit() %>% # can use extract_fit_parsnip()
+  tidy() # dots become zeros
+
+#Collect predictions
+##Test performance
+glmnet_predictions <- qb_glmnet_final_wf %>%
+      last_fit(qb_split, metrics = metric_set(rmse)) %>% 
+      collect_predictions()
+
+# Test performance
+qb_glmnet_final_wf %>% 
+  last_fit(qb_split, metrics = metric_set(rmse, rsq, mae)) %>% 
+  collect_metrics() 
+
+# Check metrics manually
+test_pred_v_actual <- data.frame(cbind(glmnet_predictions$FantPt.Future, glmnet_predictions$.pred))
+rmse(test_pred_v_actual, X1,X2)
+
+# Predicted vs. Actual
+mygg <- ggplot(test_pred_v_actual, aes(x=X1, y=X2)) + geom_point() +
+  ggtitle("Predicted vs. Actual on Test Data\nfor Penalized Regression (QB)")+
+  xlab("Actual Fantasy Points")+
+  ylab("Predicted Fantasy Points")+
+  theme(plot.title=element_text(hjust=0.5, face='bold')) +
+  geom_abline(slope = 1, intercept = 0)
+
+ggplotly(mygg)
+mygg
+```
+
+```{r}
+# Extract resampled estiamte
+penalized_linear_resamples <- c()
+for(i in 1:25){
+  penalized_linear_resamples <- append(penalized_linear_resamples, qb_glmnet_fit$.metrics[[i]]$.estimate)
+}
+```
+
+
+## Visualize Resampling for Penalized Regression
+```{r}
+param_names <- list(
+  'penalty'="Penalty",
+  'mixture'="Mixture"
+)
+
+parameter_labeller <- function(variable,value){
+  return(param_names[value])
+}
+
+qb_glmnet_fit %>%
+  collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  select(mean, penalty:mixture) %>%
+  pivot_longer(penalty:mixture,
+               values_to = "value",
+               names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x", labeller=parameter_labeller) +
+  labs(x = NULL, y = "RMSE") +
+  ggtitle("Performance of Hyperparameters for Penalized Regression")+
+  theme(plot.title=element_text(hjust=0.5, face='bold'))
+```
+
+
+# Recipe for Random Forest and XGBoost
+```{r}
+# Create recipe
+tidy_rec <- recipe(FantPt.Future ~ ., data = qb_train) %>%
+                step_nzv(all_predictors()) %>%
+                step_corr(all_predictors(), -all_nominal()) %>%
+                step_lincomb(all_predictors(), -all_nominal()) %>%
+                step_center(all_predictors(), -all_nominal()) %>% 
+                step_scale(all_predictors(), -all_nominal()) %>% 
+                step_dummy(all_nominal(), one_hot = TRUE)
+
+# Prep
+tidy_prep <- prep(tidy_rec)
+
+tidy_juice <- juice(tidy_prep)
+
+set.seed(123)
+tidy_kfolds <- vfold_cv(qb_train, v = 5, repeats = 5)
+
+##To save_ all predictions
+#ctrl_grid_ranger <- control_stack_grid()
+#ctrl_grid_xgb <- control_stack_grid()
+
+```
+
+# Random Forest
+```{r}
+# Define model
+qb_ranger <- rand_forest(trees = 10*(ncol(juice(prep(tidy_rec)))-1),
+                          mtry = tune(),
+                          min_n = tune()) %>%
+  set_mode("regression") %>%
+  set_engine("ranger", seed = 3341, num.threads = 4, importance = "impurity")
+
+# Define workflow
+qb_ranger_wf <- workflow() %>% 
+  add_recipe(tidy_rec) %>% 
+  add_model(qb_ranger)
+
+# Define tuning parameters
+# HOML suggestion for mtry: start with five evenly spaced values going from 2 to p, with the suggested defaults in the middle
+ranger_param <- extract_parameter_set_dials(qb_ranger) %>% 
+  update(mtry = mtry(range = c(2, (ncol(juice(prep(tidy_rec)))-1)))) %>%
+  update(min_n = min_n(range = c(1, 5)))
+ranger_grid <- grid_latin_hypercube(ranger_param, size=8)
+setwd("C:/Users/delan/Downloads/STAT6341 Sports Analytics/Fantasy Project")
+ranger_grid <- readRDS("QB model objects/ranger_grid.rds")
+```
+```{r}
+#| eval: false
+#Tune the model
+qb_ranger_fit <- tune_grid(
+    qb_ranger_wf,
+    resamples = tidy_kfolds,
+    grid = ranger_grid,
+    control = ctrl_grid_ranger,
+    metrics = metric_set(rmse))
+```
+```{r}
+qb_ranger_fit <- readRDS("QB model objects/qb_ranger_fit.rds")
+# Resampling results
+ranger_resamples <- qb_ranger_fit %>% collect_metrics()
+
+# Finalize 
+qb_ranger_best_tune <- qb_ranger_fit %>% select_best("rmse")
+qb_ranger_wf_final <- 
+  qb_ranger_wf %>% 
+  finalize_workflow(qb_ranger_best_tune)
+
+# Test Predictions
+qb_ranger_fit_final <- qb_ranger_wf_final %>%
+  last_fit(qb_split, metrics = metric_set(rmse)) 
+
+# Get Predictions
+ranger_predictions <- qb_ranger_wf_final %>%
+      last_fit(qb_split, metrics = metric_set(rmse)) %>% 
+      collect_predictions()
+
+# Collect metrics
+qb_ranger_fit_final %>%
+  collect_metrics()
+
+# Check metrics manually
+test_pred_v_actual_ranger <- cbind(ranger_predictions, qb_test$FantPt.Future)
+rmse(test_pred_v_actual_ranger, qb_test$FantPt.Future,.pred)
+
+# Predicted vs. Actual
+ggplot_ranger <- ggplot(test_pred_v_actual_ranger, aes(x=FantPt.Future, y=.pred)) + geom_point() +
+  ggtitle("Predicted vs. Actual on Test Data for Random Forest")+
+  xlab("Actual Fantasy Points")+
+  ylab("Predicted Fantasy Points")+
+  theme(plot.title=element_text(hjust=0.5, face='bold')) +
+  geom_abline(slope = 1, intercept = 0)
+ggplotly(ggplot_ranger)
+
+# Variable Importance
+qb_ranger_wf_final %>%
+  fit(data = qb_train) %>%
+  extract_fit_parsnip() %>%
+  vip(geom = "point", num_features = 15)
+
+```
+
+# Random Forest  - Visualizing the fit
+```{r}
+param_names <- list(
+  'min_n'="Min Node Size",
+  'mtry'="Min Predictors at Each Split"
+)
+
+parameter_labeller <- function(variable,value){
+  return(param_names[value])
+}
+
+qb_ranger_fit %>%
+  collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  select(mean, min_n:mtry) %>%
+  pivot_longer(min_n:mtry,
+               values_to = "value",
+               names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x", labeller=parameter_labeller) +
+  labs(x = NULL, y = "RMSE") +
+  ggtitle("Performance of Hyperparameters for Random Forest")+
+  theme(plot.title=element_text(hjust=0.5, face='bold'))
+```
+
+#Variable Importance for Random Forest
+```{r}
+qb_variableImportance <- qb_ranger_wf_final %>%
+  fit(data = qb_train) %>%
+  extract_fit_parsnip() %>%
+  vip::vi() %>%
+  arrange(desc(Importance)) %>%
+  mutate(Variable = case_when(
+    Variable == "FantPtRm" ~ "Fantasy Point Moving Avg",
+    Variable == "PassingYdsRm" ~ "Passing Yards Moving Avg",
+    Variable == "AdjYdsGainPerPassAtt" ~ "Adjusted Yards Gained / Pass Attempt Moving Avg",
+    Variable == "CmpPercentageRm" ~ "Completion Percentage Moving Avg",
+    Variable == "TeamScoreRm" ~ "Team's Score Moving Avg",
+    Variable == "YdsGainPerPassAtt" ~ "Yards Gained / Pass Attempt Moving Avg",
+    Variable == "PassesAttRm" ~ "Passes Attempted Moving Avg",
+    Variable == "StackedMeanOppPassingYds" ~ "Opponent's Cumulative Avg of Passing Yards Allowed",
+    Variable == "TDPercentageRm" ~ "Touchdown Percentage Moving Avg",
+    Variable == "StackedMeanOppFantPt" ~ "Opponent's Cumulative Avg of Fantasy Points Allowed",
+    Variable == "RushingYdsRm" ~ "Rushing Yards Moving Avg",
+    Variable == "Age" ~ "Age",
+    Variable == "RushingAttRm" ~ "Rushing Attempts Moving Avg",
+    Variable == "RushingYdsPerAttRm" ~ "Rushing Yards / Attempt Moving Avg",
+    Variable == "SackPercentageRm" ~ "Sack Percentage Moving Avg",
+    TRUE ~ "Other"
+  ))
+
+  
+  
+qb_variableImportance_ggplot <-  qb_variableImportance %>%
+  filter(Variable != "Other") %>% ungroup() %>%
+  dplyr::arrange(desc(Importance))
+
+
+  ggplot(qb_variableImportance_ggplot)+
+  geom_col(aes(x = reorder(Variable, Importance), y = Importance))+
+  ggtitle("Figure 1B: Variable Importance for\nRandom Forest (QB)")+
+  xlab("Variable")+
+  ylab("Overall Importance")+
+  coord_flip(ylim =c(15000, 25000))+
+  theme(plot.title=element_text(hjust=0.5, face='bold'))
+
+```
+## Partial dependence for Random Forest
+```{r}
+pdp.ranger.final <- ranger(FantPt.Future ~ ., data = qb_train,
+          num.trees       = 2000,
+          mtry            = 2,
+          min.node.size   = 2,
+          respect.unordered.factors = 'order',
+          importance      = 'impurity'
+                           )
+
+p1 <- pdp.ranger.final %>%
+  partial(pred.var = "FantPtRm") %>%
+  autoplot(smooth = TRUE, ylab = 'Fantasy Points for Upcoming Game', xlab = 'Moving Average of Fantasy Points') +
+  theme_bw() +
+  ggtitle("Figure 3A: PDP - Fantasy Point Moving Average for Random Forest (QB)") +
+  theme(plot.title=element_text(hjust=0.5, face='bold'))
+
+p1
+```
+
+# XGBoost
+```{r}
+qb_xgboost <- boost_tree(
+                  mode = "regression",
+                  mtry = tune(),
+                  trees = 2000,
+                  min_n = tune(),
+                  tree_depth = tune(),
+                  learn_rate = tune()) %>% ## increase learning rate??
+                  set_engine("xgboost", nthread = 30, importance = "impurity")
+
+# Define parameter grid
+qb_xgboost_param <- extract_parameter_set_dials(qb_xgboost) %>% 
+                    update(mtry = mtry(c(2, ncol(juice(prep(tidy_rec)))-1))) %>%
+                    update(min_n = min_n(c(5, 15)))%>%
+                    update(tree_depth = tree_depth(c(3, 8)))
+qb_xgboost_grid <- grid_max_entropy(
+                  qb_xgboost_param, 
+                  size = 16)
+qb_xgboost_grid <- readRDS("QB model objects/qb_xgboost_grid.rds")
+
+# Define workflow
+qb_xgboost_wf <- workflow() %>% 
+                    add_recipe(tidy_rec) %>% 
+                    add_model(qb_xgboost)
+```
+```{r}
+#| eval: false
+# Tune with resampling
+qb_xgboost_fit <- tune_grid(qb_xgboost_wf,
+                            resamples = tidy_kfolds,
+                            grid = qb_xgboost_grid,
+                            control = ctrl_grid_xgb,
+                            metrics = metric_set(rmse))
+```
+```{r}
+qb_xgboost_fit <- readRDS("QB model objects/qb_xgboost_fit.rds")
+qb_xgboost_best_tune <- qb_xgboost_fit %>%
+                              select_best("rmse") 
+qb_xgboost_best_tune
+
+# Finalize workflsow
+qb_xgboost_final <- qb_xgboost_wf %>% 
+  finalize_workflow(qb_xgboost_best_tune)
+```
+```{r}
+# Test Predictions
+qb_xgboost_fit_final <- qb_xgboost_final %>%
+  last_fit(qb_split, metrics = metric_set(rmse)) 
+
+xgboost_predictions <- qb_xgboost_final %>%
+      last_fit(qb_split, metrics = metric_set(rmse)) %>% 
+      collect_predictions()
+```
+```{r}
+qb_xgboost_fit_final <- readRDS("QB model objects/qb_xgboost_fit_final.rds")
+xgboost_predictions <- readRDS("QB model objects/xgboost_predictions.rds")
+
+# Collect metrics
+qb_xgboost_fit_final %>%
+  collect_metrics()
+
+# Check metrics manually
+test_pred_v_actual <- data.frame(cbind(xgboost_predictions$FantPt.Future, xgboost_predictions$.pred))
+rmse(test_pred_v_actual, X1,X2)
+
+# Predicted vs. Actual
+ggplot(test_pred_v_actual, aes(x=X1, y=X2)) + geom_point() +
+  ggtitle("Predicted vs. Actual on Test Data - XGBoost for QB")+
+  xlab("Actual Fantasy Points")+
+  ylab("Predicted Fantasy Points")+
+  theme(plot.title=element_text(hjust=0.5, face='bold')) +
+  geom_abline(slope = 1, intercept = 0)
+
+# Variable Importance
+qb_xgboost_final %>%
+  fit(data = qb_train) %>%
+  extract_fit_parsnip() %>%
+  vip(geom = "point", num_features = 15)
+
+
+```
+
+## Partial dependence for XGBoost
+```{r}
+
+X <- as.matrix(tidy_juice[,-19])
+Y <- as.numeric(tidy_juice$FantPt.Future)
+pdp.xgb.final <- xgboost(data = X,
+                         label = Y,
+                         nrounds= 1000,
+                         params = list(max_depth = 7,
+                            eta = 0.00279,
+                            min_child_weight = 5,
+                            colsample_bynode = 0.25),
+                            objective = "reg:squarederror",
+                         verbose = 0
+                            #respect.unordered.factors = 'order',
+                            #importance = 'impurity'
+                           )
+p1 <- pdp.xgb.final %>%
+  partial(pred.var = "FantPtRm", train = X) %>%
+  autoplot(smooth = TRUE, ylab = 'Fantasy Points for Upcoming Game', xlab = 'Moving Average of Fantasy Points') +
+  theme_bw() +
+  ggtitle("Figure 3B: PDP - Fantasy Point Moving Average for XGBoost (QB)") +
+  theme(plot.title=element_text(hjust=0.5, face='bold'))
+
+p1
+```
+
+
+```{r}
+xgb_resamples <- (qb_xgboost_fit %>% collect_metrics())$mean
+```
+
+## Visualize Resampling for XGBoost
+```{r}
+supp.labs <- c("Learning Rate", "Min Node Size","Min Predictors at Each Split","Tree Depth")
+names(supp.labs) <- c("learn_rate", "min_n","mtry","tree_depth")
+
+param_names <- list(
+  'learn_rate'="Learning Rate",
+  'min_n'="Min Node Size",
+  'mtry'="Min Predictors at Each Split",
+  'tree_depth'="Tree Depth"
+)
+
+parameter_labeller <- function(variable,value){
+  return(param_names[value])
+}
+
+qb_xgboost_fit %>%
+  collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  select(mean, mtry:learn_rate) %>%
+  pivot_longer(mtry:learn_rate,
+               values_to = "value",
+               names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x", labeller=parameter_labeller) +
+  labs(x = NULL, y = "RMSE") +
+  ggtitle("Performance of Hyperparameters for XGBoost")+
+  theme(plot.title=element_text(hjust=0.5, face='bold'))
+```
+
+#Variable Importance for XGBoost
+```{r}
+qb_variableImportance <- qb_xgboost_final %>%
+  fit(data = qb_train) %>%
+  extract_fit_parsnip() %>%
+  vip::vi() %>%
+  arrange(desc(Importance)) %>%
+  mutate(Variable = case_when(
+    Variable == "FantPtRm" ~ "Fantasy Point Moving Avg",
+    Variable == "PassingYdsRm" ~ "Passing Yards Moving Avg",
+    Variable == "CmpPercentageRm" ~ "Completion Percentage Moving Avg",
+    Variable == "Age" ~ "Age",
+    Variable == "TeamScoreRm" ~ "Team's Score Moving Avg",
+    Variable == "StackedMeanOppPassingYds" ~ "Opponent's Cumulative Avg of Passing Yards Allowed",
+    Variable == "StackedMeanOppFantPt" ~ "Opponent's Cumulative Avg of Fantasy Points Allowed",
+    Variable == "RushingYdsRm" ~ "Rushing Yards Moving Avg",
+    Variable == "RushingAttRm" ~ "Rushing Attempts Moving Avg",
+    Variable == "AdjYdsGainPerPassAtt" ~ "Adjusted Yards Gained / Pass Attempt Moving Avg",
+    Variable == "RushingYdsPerAttRm" ~ "Rusing Yards / Attempt Moving Avg",
+    Variable == "OppScoreRm" ~ "Opponent's Score Moving Avg",
+    Variable == "SackPercentageRm" ~ "Sack Percentage Moving Avg",
+    Variable == "PassesAttRm" ~ "Passes Attempted Moving Avg",
+    Variable == "YdsGainPerPassAtt" ~ "Yards Gained / Pass Attempt Moving Avg",
+    TRUE ~ "Other"
+  ))
+
+  
+  
+qb_variableImportance_ggplot <-  qb_variableImportance %>%
+  filter(Variable != "Other") %>% ungroup() %>%
+  dplyr::arrange(desc(Importance))
+
+
+  ggplot(qb_variableImportance_ggplot)+
+  geom_col(aes(x = reorder(Variable, Importance), y = Importance))+
+  ggtitle("Figure 1C: Variable Importance for\nXGBoost (QB)")+
+  xlab("Variable")+
+  ylab("Overall Importance")+
+  coord_flip(ylim=c(0.02,0.125))+
+  theme(plot.title=element_text(hjust=0.5, face='bold'))
+
+```
+
