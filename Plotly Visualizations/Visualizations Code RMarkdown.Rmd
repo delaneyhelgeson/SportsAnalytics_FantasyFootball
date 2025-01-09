@@ -1,0 +1,381 @@
+---
+title: "HW4 6341"
+author: "Delaney Helgeson"
+date: "2022-09-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = 'C:/Users/delan/')
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# HW 3 - STAT 6341
+
+library(ggplot2)
+library(tidyverse)
+library(plotly)
+library(DescTools)
+library(RColorBrewer)
+library(patchwork)
+
+# Read in data (data has already been webscraped)
+# Still working out the kinks of where to store data. Might change directories later
+year <- "2016"
+#setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2016 <- read.csv(paste("Downloads/HW3Data/QB_",year,"_All.csv", sep=''))
+rb_2016 <- read.csv(paste("Downloads/HW3Data/RB_",year,"_All.csv", sep=''))
+wr_2016 <- read.csv(paste("Downloads/HW3Data/WR_",year,"_All.csv", sep=''))
+te_2016 <- read.csv(paste("Downloads/HW3Data/TE_",year,"_All.csv", sep=''))
+injuries_2016 <- read.csv(paste("Downloads/HW3Data/injuries_",year,".csv", sep=''))
+
+year <- "2017"
+#setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2017 <- read.csv(paste("Downloads/HW3Data/QB_",year,"_All.csv", sep=''))
+rb_2017 <- read.csv(paste("Downloads/HW3Data/RB_",year,"_All.csv", sep=''))
+wr_2017 <- read.csv(paste("Downloads/HW3Data/WR_",year,"_All.csv", sep=''))
+te_2017 <- read.csv(paste("Downloads/HW3Data/TE_",year,"_All.csv", sep=''))
+injuries_2017 <- read.csv(paste("Downloads/HW3Data/injuries_",year,".csv", sep=''))
+
+year <- "2018"
+#setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+
+qb_2018 <- read.csv(paste("Downloads/HW3Data/QB_",year,"_All.csv", sep=''))
+rb_2018 <- read.csv(paste("Downloads/HW3Data/RB_",year,"_All.csv", sep=''))
+wr_2018 <- read.csv(paste("Downloads/HW3Data/WR_",year,"_All.csv", sep=''))
+te_2018 <- read.csv(paste("Downloads/HW3Data/TE_",year,"_All.csv", sep=''))
+injuries_2018 <- read.csv(paste("Downloads/HW3Data/injuries_",year,".csv", sep=''))
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+
+#Set plot title margins
+mrg <- list(l = 50, r = 50,
+            b = 50, t = 50,
+            pad = 20)
+
+# Plot #1: Player stats over the course of the season
+# Chosen player: Philip Rivers. Would be cool to be able to generalize
+# this to other players
+
+
+Philip_2016 <- qb_2016 %>% 
+  filter(Player == "Philip Rivers") %>%
+  select(GameNum,Week,FantPt)
+
+Philip_2017 <- qb_2017 %>% 
+  filter(Player == "Philip Rivers") %>%
+  select(GameNum,Week,FantPt)
+
+Philip_2018 <- qb_2018 %>% 
+  filter(Player == "Philip Rivers") %>%
+  select(GameNum,Week,FantPt)
+
+Philip_data <- full_join(full_join(Philip_2016,Philip_2017, by = c("GameNum"), 
+                    suffix = c(".2016",".2017")),
+          Philip_2018, by = "GameNum") %>%
+  rename(Week.2018 = Week,
+         FantPt.2018 = FantPt)
+
+Philip_fig1 <- plot_ly(Philip_data, x = ~GameNum, y = ~FantPt.2016, name = '2016',
+                      type = 'scatter', mode = 'lines+markers') %>%
+  layout(title = "Figure 1a: Fantasy Points Scored by Philip Rogers across the Season (2016, 2017)",
+         yaxis = list(title = 'Fantasy Points Scored'),
+         xaxis = list(title = 'Game of Season'),
+         margin = mrg)
+Philip_fig1 <- Philip_fig1 %>% add_trace(y = ~FantPt.2017, name = '2017',
+                                       mode = 'lines+markers')
+
+
+
+Philip_fig2 <- plot_ly(Philip_data, x = ~GameNum, y = ~FantPt.2017, name = '2017',
+                      type = 'scatter', mode = 'lines+markers',
+                      color = 'orange') %>%
+  layout(title = "Figure 1b: Fantasy Points Scored by Philip Rogers across the Season (2017, 2018)",
+         yaxis = list(title = 'Fantasy Points Scored'),
+         xaxis = list(title = 'Game of Season'),
+         margin = mrg)
+
+Philip_fig2 <- Philip_fig2 %>% add_trace(y = ~FantPt.2018, name = '2018',
+                                       mode = 'lines+markers',
+                                       line = list(color = 'rgb(15, 150, 85)'),
+                                       marker = list(color = 'rgb(15, 150, 85)'))
+
+par(mfrow=c(1,2))
+Philip_fig1
+Philip_fig2
+```
+
+
+#### Figures 1a and 1b show the fantasy points scored by Philip Rodgers over the course of the 2016, 2017, and 2018 seasons. In figure 1a, the 2016 and 2017 seasons are compared. In figure 1b, the 2017 and 2018 seasons are compared. A consumer could use this graph to observe any game-by-game trends or patterns in performance over the course of the season. Two years are shown simultaneously so the reader can compare the player's most recent performance to his performance at the same point in the season during the previous year. 
+
+#### Ideally, a consumer would be able to select player names from a drop down menu and display their progress over the course of one or more selected seasons. 
+
+
+
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+
+# Plot 2: Explore injuries
+# Potentially make it into a percentages/stacked bar chart instead of a counts/stacked bar chart
+# Might be easier to compare proportions of players with different injuries. 
+
+injuries_2016_filtered <- injuries_2016 %>%
+  filter(Game.Status %in% c("Out","Questionable","Doubtful"),
+         Position %in% c("RB","WR","TE","QB")) %>%
+  select(Player, Position, Injuries) %>%
+  distinct()
+
+rows_to_remove <- c()
+
+for(i in 1:dim(injuries_2016_filtered)[1]){
+  if(str_detect(injuries_2016_filtered$Injuries[i], ",")){
+    injuries_2016_filtered <- injuries_2016_filtered %>%
+      add_row(Player = injuries_2016_filtered$Player[i],
+              Position = injuries_2016_filtered$Position[i],
+              Injuries = str_split_fixed(injuries_2016_filtered$Injuries[i], ",", 2)[,1]) %>%
+      add_row(Player = injuries_2016_filtered$Player[i],
+              Position = injuries_2016_filtered$Position[i],
+              Injuries = str_split_fixed(injuries_2016_filtered$Injuries[i], ",", 2)[,2])
+      rows_to_remove <- append(rows_to_remove, i)
+  }
+}
+
+injuries_2016_filtered <- injuries_2016_filtered %>% 
+  slice(-rows_to_remove)
+
+new_injuries <- case_when(
+  injuries_2016_filtered$Injuries %like any% c("%Shoulder%","%Back%","%Stinger%",
+                                  "%Chest%","%Rib%") ~ "Shoulder_Back_Chest",
+  injuries_2016_filtered$Injuries %like any% c("%Hamstring%","%Quadricep%",
+                                  "%Thigh%","%Glute%","%Groin%","%Hip%") ~ "Thigh_Hip",
+  injuries_2016_filtered$Injuries %like any% c("%Calf%","%Fibula%","%Shin%","%Lower Leg%",
+                                  "%Knee%") ~ "Knee_LowerLeg",
+  injuries_2016_filtered$Injuries %like any% c("%Foot%","%Achilles%","%Toe%","%Ankle%") ~ "Foot_Ankle",
+  injuries_2016_filtered$Injuries %like any% c("%Elbow","%Hand%","%Arm%","%Wrist%",
+                                  "%Bicep%","%Forearm%","%Finger%","%Thumb%") ~ "Arm_Hand",
+  injuries_2016_filtered$Injuries %like any% c("%Concussion","%Head%","%Ear%") ~ "Head",
+  TRUE ~ "Other"
+)
+
+injuries_2016_filtered2 <- injuries_2016_filtered %>%
+  mutate(Injuries_2 = new_injuries)
+
+injuries_table <- as.data.frame.matrix(table(injuries_2016_filtered2[,c("Position","Injuries_2")]))
+injuries_table <- injuries_table %>%
+  mutate(
+    Position = rownames(.), .before = Arm_Hand
+  )
+rownames(injuries_table) <- 1:nrow(injuries_table)
+
+injuries_table_freq <- injuries_table %>%
+  group_by(Position)  %>%
+  mutate(TotalInjuries = Arm_Hand + Foot_Ankle + Head + Knee_LowerLeg + Other + Shoulder_Back_Chest + Thigh_Hip,
+         Arm_Hand = Arm_Hand*100 / TotalInjuries,
+         Foot_Ankle = round((Foot_Ankle*100 / TotalInjuries), 1),
+         Head = round((Head*100 / TotalInjuries),1),
+         Knee_LowerLeg = round((Knee_LowerLeg*100 / TotalInjuries),1),
+         Other = round((Other*100 / TotalInjuries),1),
+         Shoulder_Back_Chest = round((Shoulder_Back_Chest*100 / TotalInjuries),1),
+         Thigh_Hip = round((Thigh_Hip*100 / TotalInjuries),1))
+
+injuries_table_freq <- data.frame(injuries_table_freq)
+
+injuries_fig <- plot_ly(injuries_table_freq, x = ~Position, y = ~Arm_Hand, type = 'bar', name = 'Arm/Hand',
+                        colors="#8DD3C7")
+injuries_fig <- injuries_fig %>% add_trace(y = ~Shoulder_Back_Chest, name = 'Shoulder/Back/Chest',
+                                           marker = list(color = "#FCCDE5"))
+injuries_fig <- injuries_fig %>% add_trace(y = ~Head, name = 'Head',
+                                           marker = list(color = "#BEBADA"))
+injuries_fig <- injuries_fig %>% add_trace(y = ~Thigh_Hip, name = 'Thigh/Hip',
+                                           marker = list(color = "#FB8072"))
+injuries_fig <- injuries_fig %>% add_trace(y = ~Knee_LowerLeg, name = 'Knee/Lower Leg',
+                                           marker = list(color = "#80B1D3"))
+injuries_fig <- injuries_fig %>% add_trace(y = ~Foot_Ankle, name = 'Foot/Ankle',
+                                           marker = list(color = "#FDB462"))
+injuries_fig <- injuries_fig %>% add_trace(y = ~Other, name = 'Other',
+                                           marker = list(color = "#B3DE69"))
+
+injuries_fig <- injuries_fig %>% layout(title = 
+                'Figure 2: Breakdown of Injury Type by Position for the 2016 season',
+                                        yaxis = list(title = 'Percentage of Injuries'),
+                                        barmode = 'stack',
+                                        margin = mrg)
+
+injuries_fig
+# of all the tight ends injured, 21
+
+```
+
+#### Figure 2 shows the breakdown of injury type by position. A consumer could use a this graph to analyze which players are more susceptible to certain types of injuries. 
+
+
+
+
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+
+# Plot 3: Create a bubble scatter plot showing # Wins vs. average score, with bubbles sized by 
+# Total/average fantasy points. 
+
+
+# Step 1: Get data for 2016 games. 
+year <- 2016
+#setwd(paste("C:/Users/delan/Downloads/",year,sep=''))
+TeamLogs_2016 <- read.csv("Downloads/HW3Data/TeamLogs_2016.csv")
+
+
+TeamLogs_grouped <- TeamLogs_2016 %>%
+  group_by(Team) %>%
+  mutate(AverageScore = mean(ScoreTm),
+         TotalWins = sum(Outcome == "W"),
+         Team = toupper(Team)) %>%
+  select(Team, AverageScore, TotalWins) %>%
+  distinct()
+
+
+all_positions <- bind_rows(qb_2016, rb_2016, wr_2016, te_2016)
+
+all_positions_grouped <- all_positions %>%
+  group_by(Team) %>%
+  mutate(AvgFantPt = mean(as.numeric(replace_na(FantPt,0)), na.rm=TRUE),
+         Team = tolower(Team),
+         Team = ifelse(Team == "ten","oti",Team),
+         Team = ifelse(Team == "oak","rai",Team),
+         Team = ifelse(Team == "lar","ram",Team),
+         Team = ifelse(Team == "ari","crd",Team),
+         Team = ifelse(Team == "bal","rav",Team),
+         Team = ifelse(Team == "ind","clt",Team),
+         Team = ifelse(Team == "hou","htx",Team),
+         Team = toupper(Team)) %>%
+  select(Team, AvgFantPt) %>%
+  distinct()
+
+
+Bubble_data <- inner_join(TeamLogs_grouped, all_positions_grouped, by = "Team")
+Bubble_data <- Bubble_data %>% mutate(Team = toupper(Team))
+
+View(Bubble_data)
+
+sizeref <- 2.0 * max(Bubble_data$AvgFantPt) / (10**2)
+
+Bubble_fig <- plot_ly(Bubble_data, x = ~TotalWins, y = ~AverageScore, text = ~Team, type='scatter',
+                      mode='markers', color = ~AvgFantPt, 
+                      #colorbar = list(text = "Average Fantasy Points per Player"), 
+                      colors = 'Reds',
+                      sizes = c(4, 9.6),
+                      marker = list(size = ~AvgFantPt,
+                                    opacity=0.6,
+                                    sizemode = 'radius',
+                                    sizeref = sizeref
+                                    #,colorbar = list(title = list(text = "Average Fantasy Points per Player"))
+                                    ))
+
+Bubble_fig <- Bubble_fig %>% layout(title = 
+              'Figure 3: Team Wins, Scores, and Fantasy Points for the 2016 Season',
+                      xaxis = list(title = "Total Wins"),
+                      yaxis = list(title = "Average Final Score"),
+                      margin = mrg
+                      )
+
+Bubble_fig
+
+#https://plotly.com/r/reference/scatter/
+```
+
+#### Figure 3 displays the relationship between the average final points and wins obtained by a team during the 2016 season. The bubbles are sized and colored by the average number of fantasy points scored by the teams' offensive players across all games. A consumer could use this to observe patterns in average player contribution to the teams' success. 
+
+
+
+
+
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+
+### Plot 4: Quarterback Passes (Complete vs. Incomplete)
+# https://plotly.com/r/horizontal-bar-charts/
+qb_passes <- qb_2018 %>%
+  group_by(Player) %>%
+  mutate(TotalPassesComp = sum(PassesComp),
+         TotalPassesIncomp = sum(PassesInc),
+         TotalPassesAtt = sum(PassesAtt),
+         MeanCmpPercentage = mean(CmpPercentage)) %>%
+  arrange(desc(TotalPassesAtt)) %>%
+  select(Player, TotalPassesComp, TotalPassesIncomp,TotalPassesAtt,MeanCmpPercentage) %>%
+  distinct()
+
+qb_passes <- data.frame(qb_passes[1:15,])
+
+qb_fig <- plot_ly(qb_passes, x = ~TotalPassesComp, y = ~reorder(Player,MeanCmpPercentage), type = 'bar',
+                  name = 'Passes Completed', orientation = 'h')
+qb_fig <- qb_fig %>% add_trace(x = ~TotalPassesIncomp, name = 'Passes Incompleted')
+
+qb_fig <- qb_fig %>% layout(title = 'Figure 4: Quarterback Passing Performance (2018 Season)',
+                            yaxis = list(title = 'Player'),
+                            xaxis = list(title = 'Total Passes Attempted'),
+                            barmode = 'stack',
+                            margin = mrg)
+
+
+qb_fig <- qb_fig %>% add_annotations(xref = 'TotalPassesComp', yref = 'Player',
+                                     x = qb_passes$TotalPassesComp / 2, y = qb_passes$Player,
+                               text = qb_passes[,'TotalPassesComp'],
+                               font = list(family = 'Arial', size = 12,
+                                           color = 'rgb(248, 248, 255)'),
+                               showarrow = FALSE) 
+
+qb_fig <- qb_fig %>% add_annotations(xref = 'TotalPassesIncomp', yref = 'Player',
+                                     x = qb_passes$TotalPassesComp + qb_passes$TotalPassesInc / 2, y = qb_passes$Player,
+                                     text = qb_passes[,'TotalPassesIncomp'],
+                                     font = list(family = 'Arial', size = 12,
+                                                 color = 'rgb(248, 248, 255)'),
+                                     showarrow = FALSE) 
+
+qb_fig <- qb_fig %>% add_annotations(xref = 'MeanCmpPercentage', yref = 'Player',
+                                     x = 50 + qb_passes$TotalPassesAtt, y = qb_passes$Player,
+                                     text = paste(round(qb_passes[,'MeanCmpPercentage'],1),"%",sep=''),
+                                     font = list(family = 'Arial', size = 12,
+                                                 color = 'black'),
+                                     showarrow = FALSE) 
+qb_fig
+
+
+```
+
+#### Figure 4 shows the top 15 quarterbacks of the 2018 season by total number of passing attempts. The players are ordered by descending passing completion percentage. Within each bar is a breakdown of the total number of passes completed and incompleted throughout the season. A consumer could use this to compare performances of their favorite quarterbacks and assess the relationship between passing success and the number of passes attempted.  
+
+
+
+
+
+
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+
+# Plot 5: Number of touchdowns by position type and team
+
+td_data <- all_positions %>% 
+  filter(Team %in% c("DAL","DEN"),
+         Position != "fb") %>%
+  mutate(Position = toupper(Position),
+         FantPt = replace_na(FantPt, 0)) %>%
+  select(Team, Position, FantPt)
+
+ft_fig <- plot_ly(td_data, x = ~Position, y = ~FantPt, color = ~Team, type = "box")
+
+ft_fig <- ft_fig %>% layout(boxmode = "group",
+                            title = "Figure 5: Fantasy Points Scored by Offensive Positions \n(2016, 2017, 2018 Seasons)",
+                            yaxis = list(title = "Fantasy Points"),
+                            margin = mrg)
+ft_fig
+
+```
+
+#### Figure 5 shows a side-by-side comparison of the distribution of fantasy points scored at the player level for all games in the 2016, 2017, and 2018 seasons. The side-by-side boxplots compare the performance for the quarterbacks, running backs, tight ends, and wide receivers of the Dallas Cowboys and Denver Broncos. A consumer could use this to compare the offensive performance of two different teams. 
